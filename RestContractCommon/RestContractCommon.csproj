@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+	  <AssemblyName>ClientServerContractCommon</AssemblyName>
+	  <RootNamespace>Net.Leksi.Server.Contract</RootNamespace>
+	  <OutputType>Library</OutputType>
+	  <Copyright>2022-04-19</Copyright>
+	  <VersionPrefix>1.0.0</VersionPrefix>
+	  <PackageRequireLicenseAcceptance>True</PackageRequireLicenseAcceptance>
+	  <PackageLicenseExpression>MIT</PackageLicenseExpression>
+	  <Description>
+	  </Description>
+	  <GenerateDocumentationFile>True</GenerateDocumentationFile>
+	  <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+	  <PackageId>Net.Leksi.$(AssemblyName)</PackageId>
+	  <Authors>Alexey leksiq Zakharov</Authors>
+	  <RepositoryUrl>https://sourceforge.net/p/clientservercontract/code</RepositoryUrl>
+	  <RepositoryUrl>https://github.com/Leksiqq/ClientServerContract</RepositoryUrl>
+	  <PackageProjectUrl>https://clientservercontract.sourceforge.io/</PackageProjectUrl>
+	  <PackageTags>ASP.NET Client</PackageTags>
+	  <IsPackable>true</IsPackable>
+  </PropertyGroup>
+
+	<Target Name="CopyPackage" AfterTargets="Pack">
+		<Move SourceFiles="$(OutputPath)..\$(PackageId).$(PackageVersion).nupkg" DestinationFolder="F:\leksi\C#\nuget.local" />
+	</Target>
+
+</Project>
