@@ -1,7 +1,7 @@
 ﻿using System.Reflection;
 using System.Text;
 
-namespace Net.Leksi.Server.Contract;
+namespace Net.Leksi.RestContract;
 
 internal class AttributeHolder
 {
@@ -43,10 +43,6 @@ internal class AttributeHolder
 
     private string SelectFormat(PropertyInfo property, object value)
     {
-        if(value.GetType() == typeof(SerializedAttribute) || value.GetType() == typeof(ConnectorAttribute))
-        {
-            return string.Format(Constants.SerializedAttributeFormat, new TypeHolder((Type)property.GetValue(value)!).TypeName);
-        }
         if (property.PropertyType == typeof(Type))
         {
             return string.Format(Constants.TypePropertyFormat, property.Name, new TypeHolder((Type)property.GetValue(value)!).TypeName);

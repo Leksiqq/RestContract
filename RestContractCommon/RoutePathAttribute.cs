@@ -1,4 +1,4 @@
-﻿namespace Net.Leksi.Server.Contract;
+﻿namespace Net.Leksi.RestContract;
 
 /// <summary>
 /// <para xml:lang="ru">
@@ -8,7 +8,7 @@
 /// Attribute corresponding to the RouteAttribute from ASP.NET MVC, so as not to introduce an extra dependency on the client.
 /// </para>
 /// </summary>
-[AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]
+[AttributeUsage(AttributeTargets.Method)]
 public class RoutePathAttribute : Attribute
 {
     /// <summary>

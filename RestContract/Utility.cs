@@ -1,4 +1,4 @@
-﻿namespace Net.Leksi.Server.Contract;
+﻿namespace Net.Leksi.RestContract;
 
 internal static class Utility
 {

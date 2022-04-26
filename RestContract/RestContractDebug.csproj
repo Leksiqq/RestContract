@@ -4,8 +4,8 @@
     <TargetFramework>net6.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AssemblyName>Net.Leksi.Server.Contract</AssemblyName>
-    <RootNamespace>Net.Leksi.Server.Contract</RootNamespace>
+    <AssemblyName>Net.Leksi.RestContract</AssemblyName>
+    <RootNamespace>Net.Leksi.RestContract</RootNamespace>
     <OutputType>Library</OutputType>
   </PropertyGroup>
 
@@ -18,6 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNet.Mvc" Version="5.2.8" />
     <PackageReference Include="Net.Leksi.DtoKit" Version="1.0.0" />
   </ItemGroup>
 

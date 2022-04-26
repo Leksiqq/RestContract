@@ -4,12 +4,8 @@
     <TargetFramework>net6.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-	  <AssemblyName>ClientServerContractCommon</AssemblyName>
-	  <RootNamespace>Net.Leksi.Server.Contract</RootNamespace>
+	  <AssemblyName>Net.Leksi.RestContractCommon</AssemblyName>
+	  <RootNamespace>Net.Leksi.RestContract</RootNamespace>
 	  <OutputType>Library</OutputType>
   </PropertyGroup>
-
-  <ItemGroup>
-    <PackageReference Include="Net.Leksi.DtoKit" Version="1.0.0" />
-  </ItemGroup>
 </Project>

@@ -1,4 +1,4 @@
-﻿namespace Net.Leksi.Server.Contract;
+﻿namespace Net.Leksi.RestContract;
 
 /// <summary>
 /// <para xml:lang="ru">

@@ -3,8 +3,9 @@ using Microsoft.AspNetCore.Mvc;
 using Net.Leksi.Dto;
 using System.Reflection;
 using System.Text;
+using System.Text.RegularExpressions;
 
-namespace Net.Leksi.Server.Contract;
+namespace Net.Leksi.RestContract;
 
 /// <summary>
 /// <para xml:lang="ru">
@@ -18,6 +19,8 @@ namespace Net.Leksi.Server.Contract;
 /// </summary>
 public partial class SourceGenerator
 {
+    private static readonly Regex _routeParams = new Regex("^(?:.*?({\\*?([^?:=}\\s]+).*?}).*?)*$");
+
     private readonly DtoServiceProvider? _dtoServices;
 
     private List<MethodHolder> _methods = new();
@@ -62,35 +65,6 @@ public partial class SourceGenerator
 
     /// <summary>
     /// <para xml:lang="ru">
-    /// Генерирует интерфейс API и класс конфигуратора API на основе интерфейса коннектора
-    /// </para>
-    /// <para xml:lang="en">
-    /// Generates an API interface and an API configurator class based on the connector interface
-    /// </para>
-    /// </summary>
-    /// <typeparam name="TConnector"></typeparam>
-    /// <param name="controllerFullName"></param>
-    /// <param name="configuratorFullName"></param>
-    /// <returns></returns>
-    public string GenerateApiInterfaceAndConfiguratorClass<TConnector>(string controllerFullName, string configuratorFullName)
-    {
-        CollectRequisites<TConnector>(controllerFullName, configuratorFullName);
-        return @$"//------------------------------
-// Controller interface {controllerFullName} (Generated automatically)
-//------------------------------
-{GenerateApiInterface(false)}
-//------------------------------
-// Cut here
-//------------------------------
-//------------------------------
-// Configurator class {configuratorFullName} (Generated automatically)
-//------------------------------
-{ GenerateApiConfiguratorClass()}
-";
-    }
-
-    /// <summary>
-    /// <para xml:lang="ru">
     /// Генерирует интерфейс контроллера MVC и класс прокси контроллера MVC на основе интерфейса коннектора
     /// </para>
     /// <para xml:lang="en">
@@ -107,7 +81,7 @@ public partial class SourceGenerator
         return @$"//------------------------------
 // MVC Controller interface {controllerFullName} (Generated automatically)
 //------------------------------
-{GenerateApiInterface(true)}
+{GenerateMvcControllerInterface()}
 //------------------------------
 // Cut here
 //------------------------------
@@ -118,7 +92,7 @@ public partial class SourceGenerator
 ";
     }
 
-    private string GenerateApiInterface(bool withMvc)
+    private string GenerateMvcControllerInterface()
     {
         _usings.Clear();
         _sb.Clear();
@@ -133,85 +107,28 @@ public partial class SourceGenerator
             List<AttributeHolder> tmp = method.Attributes.ToList();
             ParameterHolder? httpContext = null;
             method.Attributes.Clear();
-            if (withMvc)
-            {
-                httpContext = method.Parameters[0];
-                method.Parameters.RemoveAt(0);
-            }
+            httpContext = method.Parameters[0];
+            method.Parameters.RemoveAt(0);
             UpdateUsings(method);
-            _sb.Append(Constants.Indent).Append(method.ToString()).AppendLine(Constants.Semicolon);
+            //_sb.Append(Constants.Indent).Append(method.ToString()).AppendLine(Constants.Semicolon);
+            _sb.Append(Constants.Indent).Append(Constants.Space).Append(method.ReturnType).Append(Constants.Space)
+                .Append(method.Name).Append(Constants.LeftParen);
+            int len = _sb.Length;
+            foreach (ParameterHolder parameter in method.Parameters)
+            {
+                _sb.Append(parameter.TypeHolder.Source ?? parameter.TypeHolder).Append(Constants.Space).Append(parameter.Name).Append(Constants.Comma);
+            }
+            if (_sb.Length > len)
+            {
+                _sb.Length -= Constants.Comma.Length;
+            }
+
+            _sb.Append(Constants.RightParen).AppendLine(Constants.Semicolon);
             method.Attributes.AddRange(tmp);
-            if(httpContext is { })
+            if (httpContext is { })
             {
                 method.Parameters.Insert(0, httpContext);
             }
-        }
-
-        _sb.AppendLine(Constants.CloseBlock);
-
-        ApplyUsings();
-
-        return _sb.ToString();
-    }
-
-    private string GenerateApiConfiguratorClass()
-    {
-        _usings.Clear();
-        _sb.Clear();
-
-        UpdateUsings(_namespace);
-        UpdateUsings(new TypeHolder(typeof(IServiceProvider)));
-
-        TypeHolder baseControllerConfiguratorTh = new TypeHolder(typeof(BaseApiConfigurator));
-
-        UpdateUsings(baseControllerConfiguratorTh);
-
-        _sb.Append(Constants.Namespace).Append(_anotherNamespace).AppendLine(Constants.Semicolon).AppendLine()
-            .Append(Constants.Public).Append(Constants.Class).Append(_anotherClass).Append(Constants.Colon).AppendLine(baseControllerConfiguratorTh.TypeName)
-            .AppendLine(Constants.OpenBlock).Append(Constants.Indent).Append(Constants.Public).Append(_anotherClass).AppendLine(Constants.Constructor)
-            ;
-
-        foreach (MethodHolder method in _methods)
-        {
-            TypeHolder returnType = new TypeHolder(typeof(Func<>));
-            returnType.GenericArguments = method.Parameters.Select(ph => ph.TypeHolder).Concat(new TypeHolder[] { method.ReturnType }).ToArray();
-            foreach (TypeHolder th in returnType.GenericArguments)
-            {
-                UpdateUsings(th);
-            }
-            UpdateUsings(returnType);
-            _sb.Append(Constants.Indent).Append(Constants.Public).Append(returnType).Append(Constants.Space).Append(method.Name).Append(Constants.Arrow);
-            foreach (AttributeHolder ah in method.Attributes)
-            {
-                UpdateUsings(ah);
-                _sb.Append(ah).Append(Constants.Space);
-            }
-            _sb.Append(Constants.Async).Append(Constants.LeftParen);
-            int length = _sb.Length;
-            foreach (ParameterHolder ph in method.Parameters)
-            {
-                _sb.Append(ph.Name).Append(Constants.Comma);
-            }
-            if (length < _sb.Length)
-            {
-                _sb.Length -= Constants.Comma.Length;
-            }
-            _sb.Append(Constants.RightParen).AppendLine(Constants.Arrow)
-                .Append(Constants.Indent).Append(Constants.Indent).Append(Constants.Await).Append(Constants.LeftParen).Append(Constants.LeftParen)
-                .Append(method.ReturnType).Append(Constants.RightParen).Append(Constants.CallControllerMethod)
-                .Append(Constants.BeginGeneric).Append(_class).Append(Constants.EndGeneric).Append(Constants.LeftParen)
-                .Append(Constants.NewObjectArray).Append(Constants.OpenBlock);
-            length = _sb.Length;
-            foreach (ParameterHolder ph in method.Parameters)
-            {
-                _sb.Append(ph.Name).Append(Constants.Comma);
-            }
-            if (length < _sb.Length)
-            {
-                _sb.Length -= Constants.Comma.Length;
-            }
-            _sb.Append(Constants.CloseBlock).Append(Constants.RightParen).Append(Constants.RightParen).Append(Constants.Dot)
-                .AppendLine(Constants.ConfigureAwait).Append(Constants.Indent).Append(Constants.Indent).AppendLine(Constants.Semicolon);
         }
 
         _sb.AppendLine(Constants.CloseBlock);
@@ -231,16 +148,10 @@ public partial class SourceGenerator
         TypeHolder controllerTh = new TypeHolder(typeof(Controller));
         UpdateUsings(controllerTh);
 
-        TypeHolder baseControllerProxyTh = new TypeHolder(typeof(BaseControllerProxy));
-        UpdateUsings(baseControllerProxyTh);
-
-        AttributeHolder connectorAttribute = new(new ConnectorAttribute(_connectorType));
 
         _sb.Append(Constants.Namespace).Append(_anotherNamespace).AppendLine(Constants.Semicolon).AppendLine()
-            .AppendLine(connectorAttribute.ToString())
             .Append(Constants.Public).Append(Constants.Class).Append(_anotherClass).Append(Constants.Colon)
-            .Append(baseControllerProxyTh).Append(Constants.Comma).AppendLine(_class)
-            .AppendLine(Constants.OpenBlock).Append(Constants.Indent).Append(Constants.Public).Append(_anotherClass).AppendLine(Constants.Constructor)
+            .AppendLine(controllerTh.TypeName).AppendLine(Constants.OpenBlock)
             ;
 
         foreach (MethodHolder method in _methods)
@@ -249,7 +160,7 @@ public partial class SourceGenerator
             ParameterHolder? httpContext = method.Parameters[0];
             method.Parameters.RemoveAt(0);
             AttributeHolder? authorizeAttribute = method.Attributes.Where(ah => ah.TypeHolder.TypeName == typeof(AuthorizeAttribute).Name).FirstOrDefault();
-            if(authorizeAttribute is { })
+            if (authorizeAttribute is { })
             {
                 UpdateUsings(authorizeAttribute);
                 _sb.Append(Constants.Indent).AppendLine(authorizeAttribute.ToString());
@@ -258,37 +169,49 @@ public partial class SourceGenerator
 
             List<string> allHttpMethods = new();
 
-            foreach (string path in method.Paths)
-            {
-                AttributeHolder routeAttribute = new(new RouteAttribute(path));
-                UpdateUsings(routeAttribute);
-                _sb.Append(Constants.Indent).Append(Constants.LeftBraket).Append(routeAttribute.GetNameWithoutAttribute()).Append(Constants.LeftParen)
-                    .Append(String.Format(Constants.StringFormat, path))
-                    .Append(Constants.RightParen).AppendLine(Constants.RightBraket);
-            }
-            foreach (string httpMethod in method.HttpMethods)
-            {
-                AttributeHolder httpMethodAttribute = new(httpMethod switch
-                {
-                    Constants.Post => new HttpPostAttribute(),
-                    Constants.Put => new HttpPutAttribute(),
-                    Constants.Delete => new HttpDeleteAttribute(),
-                    Constants.Head => new HttpHeadAttribute(),
-                    Constants.Patch=> new HttpPatchAttribute(),
-                    _ => new HttpGetAttribute()
-                });
-                UpdateUsings(httpMethodAttribute);
+            AttributeHolder routeAttribute = new(new RouteAttribute(method.Path));
+            UpdateUsings(routeAttribute);
+            _sb.Append(Constants.Indent).Append(Constants.LeftBraket).Append(routeAttribute.GetNameWithoutAttribute()).Append(Constants.LeftParen)
+                .Append(String.Format(Constants.StringFormat, method.Path))
+                .Append(Constants.RightParen).AppendLine(Constants.RightBraket);
 
-                _sb.Append(Constants.Indent).Append(Constants.LeftBraket).Append(httpMethodAttribute.GetNameWithoutAttribute())
-                    .AppendLine(Constants.RightBraket);
-            }
+            AttributeHolder httpMethodAttribute = new(method.HttpMethod switch
+            {
+                Constants.Post => new HttpPostAttribute(),
+                Constants.Put => new HttpPutAttribute(),
+                Constants.Delete => new HttpDeleteAttribute(),
+                Constants.Head => new HttpHeadAttribute(),
+                Constants.Patch => new HttpPatchAttribute(),
+                _ => new HttpGetAttribute()
+            });
+            UpdateUsings(httpMethodAttribute);
+
+            _sb.Append(Constants.Indent).Append(Constants.LeftBraket).Append(httpMethodAttribute.GetNameWithoutAttribute())
+                .AppendLine(Constants.RightBraket);
 
             method.Attributes.Clear();
             UpdateUsings(method);
 
             _sb.Append(Constants.Indent).Append(Constants.Public).Append(Constants.Async).AppendLine(method.ToString()).Append(Constants.Indent)
-                .AppendLine(Constants.OpenBlock)
-                .Append(Constants.Indent).Append(Constants.Indent).Append(controllerTh.TypeName).Append(Constants.Space)
+                .AppendLine(Constants.OpenBlock);
+            Dictionary<string, string> deserialized = new();
+            foreach (ParameterHolder parameter in method.Parameters)
+            {
+                if(parameter.TypeHolder.Source is TypeHolder source)
+                {
+                    deserialized.Add(parameter.Name, source.TypeName);
+                }
+            }
+            if(deserialized.Count > 0)
+            {
+                foreach(string key in deserialized.Keys)
+                {
+                    _sb.Append(Constants.Indent).Append(Constants.Indent).Append(deserialized[key]).Append(Constants.Space)
+                        .Append(Constants.Underscore).Append(key).Append(Constants.EqualSign).Append("null").AppendLine(Constants.Semicolon);
+                }
+            }
+
+            _sb.Append(Constants.Indent).Append(Constants.Indent).Append(controllerTh.TypeName).Append(Constants.Space)
                 .Append(controllerTh.TypeName.ToLower()).Append(Constants.EqualSign)
                 .Append(Constants.LeftParen).Append(controllerTh.TypeName).Append(Constants.RightParen).Append(Constants.GetRequiredService)
                 .Append(Constants.BeginGeneric).Append(_class).Append(Constants.EndGeneric)
@@ -296,7 +219,7 @@ public partial class SourceGenerator
                 .Append(Constants.Indent).Append(Constants.Indent).Append(controllerTh.TypeName.ToLower()).Append(Constants.Dot).Append(Constants.ControllerContext)
                 .Append(Constants.EqualSign).Append(Constants.ControllerContext).AppendLine(Constants.Semicolon)
                 .Append(Constants.Indent).Append(Constants.Indent);
-            if(method.ReturnType.GenericArguments is { })
+            if (method.ReturnType.GenericArguments is { })
             {
                 _sb.Append(Constants.Return);
             }
@@ -306,12 +229,16 @@ public partial class SourceGenerator
                 .Append(Constants.RightParen).Append(Constants.Dot)
                 .Append(method.Name).Append(Constants.LeftParen);
             int length = _sb.Length;
-            foreach(ParameterHolder ph in method.Parameters)
+            foreach (ParameterHolder ph in method.Parameters)
             {
                 UpdateUsings(ph);
+                if (deserialized.ContainsKey(ph.Name))
+                {
+                    _sb.Append(Constants.Underscore);
+                }
                 _sb.Append(ph.Name).Append(Constants.Comma);
             }
-            if(length != _sb.Length)
+            if (length != _sb.Length)
             {
                 _sb.Length -= Constants.Comma.Length;
             }
@@ -417,102 +344,116 @@ public partial class SourceGenerator
 
         foreach (MethodInfo connectorMethod in _connectorType.GetMethods())
         {
-            IEnumerable<RoutePathAttribute> routeAttributes = connectorMethod.GetCustomAttributes<RoutePathAttribute>();
-            if (routeAttributes.Count() > 0)
+            if (connectorMethod.GetCustomAttribute<RoutePathAttribute>() is RoutePathAttribute routeAttribute)
             {
+                Match routeMatch = _routeParams.Match(routeAttribute.Path);
+                if (!routeMatch.Success)
                 {
-                    Type returnType = connectorMethod.ReturnType;
-                    if (returnType != typeof(Task) && (!returnType.IsGenericType || returnType.GetGenericTypeDefinition() != typeof(Task<>)))
+                    throw new Exception($"Invalid route format: {routeAttribute.Path}");
+                }
+
+                Type returnType = connectorMethod.ReturnType;
+                if (returnType != typeof(Task) && (!returnType.IsGenericType || returnType.GetGenericTypeDefinition() != typeof(Task<>)))
+                {
+                    if (returnType == typeof(void))
                     {
-                        if (returnType == typeof(void))
+                        returnType = typeof(Task);
+                    }
+                    else
+                    {
+                        returnType = typeof(Task<>).MakeGenericType(new[] { returnType });
+                    }
+                }
+
+                MethodHolder method = new()
+                {
+                    Name = connectorMethod.Name,
+                    ReturnType = new TypeHolder(returnType),
+                };
+
+                for (int i = 0; i < routeMatch.Groups[1].Captures.Count; i++)
+                {
+                    if (method.RouteMatch.ContainsKey(routeMatch.Groups[1].Captures[i].Value.ToLower()))
+                    {
+                        throw new Exception($"Not unique template in route : {routeMatch.Groups[1].Captures[i].Value}");
+                    }
+                    method.RouteMatch[routeMatch.Groups[2].Captures[i].Value.ToLower()] = routeMatch.Groups[1].Captures[i].Value;
+                }
+
+                if (returnType != connectorMethod.ReturnType)
+                {
+                    method.ReturnType.Source = new TypeHolder(connectorMethod.ReturnType);
+                }
+
+                _methods.Add(method);
+
+                method.Path = routeAttribute.Path;
+
+                if (connectorMethod.GetCustomAttribute<HttpMethodAttribute>() is HttpMethodAttribute httpMethodAttribute)
+                {
+                    method.HttpMethod = Utility.GetHttpMethodFromAttribute(httpMethodAttribute);
+                }
+                else
+                {
+                    method.HttpMethod = Constants.Get;
+                }
+
+                AuthorizationAttribute? attr = connectorMethod.GetCustomAttribute<AuthorizationAttribute>();
+                if (attr is { })
+                {
+                    AttributeHolder authorizationAttributeTh = new AttributeHolder(attr);
+                    AuthorizeAttribute authorizeAttribute = new AuthorizeAttribute();
+                    foreach (PropertyInfo pi in typeof(AuthorizationAttribute).GetProperties())
+                    {
+                        if (pi.CanWrite)
                         {
-                            returnType = typeof(Task);
-                        }
-                        else
-                        {
-                            returnType = typeof(Task<>).MakeGenericType(new[] { returnType });
-                        }
-                    }
-
-                    MethodHolder method = new()
-                    {
-                        Name = connectorMethod.Name,
-                        ReturnType = new TypeHolder(returnType),
-                    };
-
-                    if (returnType != connectorMethod.ReturnType)
-                    {
-                        method.ReturnType.Source = new TypeHolder(connectorMethod.ReturnType);
-                    }
-
-                    _methods.Add(method);
-
-                    foreach (RoutePathAttribute routeAttribute in routeAttributes)
-                    {
-                        method.Paths.Add(routeAttribute.Path);
-                    }
-
-                    foreach (HttpMethodAttribute httpMethodAttribute in connectorMethod.GetCustomAttributes<HttpMethodAttribute>())
-                    {
-                        method.HttpMethods.Add(Utility.GetHttpMethodFromAttribute(httpMethodAttribute));
-                    }
-                    if(method.HttpMethods.Count == 0)
-                    {
-                        method.HttpMethods.Add(Constants.Get);
-                    }
-
-                    AuthorizationAttribute? attr = connectorMethod.GetCustomAttribute<AuthorizationAttribute>();
-                    if (attr is { })
-                    {
-                        AttributeHolder authorizationAttributeTh = new AttributeHolder(attr);
-                        AuthorizeAttribute authorizeAttribute = new AuthorizeAttribute();
-                        foreach (PropertyInfo pi in typeof(AuthorizationAttribute).GetProperties())
-                        {
-                            if (pi.CanWrite)
+                            PropertyInfo? pi1 = typeof(AuthorizeAttribute).GetProperty(pi.Name);
+                            if (pi1 is { } && pi1.CanWrite)
                             {
-                                PropertyInfo? pi1 = typeof(AuthorizeAttribute).GetProperty(pi.Name);
-                                if (pi1 is{ } &&  pi1.CanWrite)
-                                {
-                                    pi1.SetValue(authorizeAttribute, pi.GetValue(attr));
-                                }
+                                pi1.SetValue(authorizeAttribute, pi.GetValue(attr));
                             }
                         }
-                        AttributeHolder authorizeAttributeTh = new AttributeHolder(authorizeAttribute);
-                        authorizeAttributeTh.TypeHolder.Source = authorizationAttributeTh.TypeHolder;
-
-                        method.Attributes.Add(authorizeAttributeTh);
                     }
+                    AttributeHolder authorizeAttributeTh = new AttributeHolder(authorizeAttribute);
+                    authorizeAttributeTh.TypeHolder.Source = authorizationAttributeTh.TypeHolder;
 
-                    ParameterInfo[] parameters = connectorMethod.GetParameters().Where(p => p.GetCustomAttribute<NotParameterAttribute>() is null).ToArray();
-
-                    method.Parameters.Add(new ParameterHolder { TypeHolder = new TypeHolder(typeof(HttpContext)) });
-                    string contextParameterName = Constants.Context;
-                    while (parameters.Any(p => p.Name == contextParameterName))
-                    {
-                        contextParameterName += Constants.Tchar;
-                    }
-                    method.Parameters.Last().Name = contextParameterName;
-
-                    foreach (ParameterInfo parameter in parameters)
-                    {
-                        Type parameterType = parameter.ParameterType;
-                        if (_dtoServices is { } && _dtoServices.IsRegistered(parameterType))
-                        {
-                            parameterType = typeof(string);
-                        }
-                        method.Parameters.Add(new ParameterHolder { TypeHolder = new TypeHolder(parameterType), Name = parameter.Name! });
-                        if (parameterType != parameter.ParameterType)
-                        {
-                            method.Parameters.Last().TypeHolder.Source = new TypeHolder(parameter.ParameterType);
-                            method.Parameters.Last().Attributes.Add(new AttributeHolder(new SerializedAttribute(parameter.ParameterType)));
-                        }
-                        if (IsNullable(parameter))
-                        {
-                            method.Parameters.Last().TypeHolder.TypeName += Constants.QuestionMark;
-                        }
-                    }
-
+                    method.Attributes.Add(authorizeAttributeTh);
                 }
+
+                ParameterInfo[] parameters = connectorMethod.GetParameters()
+                    .Where(p => method.RouteMatch.ContainsKey(p.Name.ToLower()) || p.GetCustomAttribute<BodyAttribute>() is { }).ToArray();
+
+                if (method.RouteMatch.Keys.Any(k => !parameters.Select(p => p.Name.ToLower()).Contains(k)))
+                {
+                    throw new Exception($"Not all templates in route are bound");
+                }
+
+                method.Parameters.Add(new ParameterHolder { TypeHolder = new TypeHolder(typeof(HttpContext)) });
+                string contextParameterName = Constants.Context;
+                while (parameters.Any(p => p.Name == contextParameterName))
+                {
+                    contextParameterName += Constants.Tchar;
+                }
+                method.Parameters.Last().Name = contextParameterName;
+
+                foreach (ParameterInfo parameter in parameters)
+                {
+                    Type parameterType = parameter.ParameterType;
+                    if (_dtoServices is { } && _dtoServices.IsRegistered(parameterType))
+                    {
+                        parameterType = typeof(string);
+                    }
+                    method.Parameters.Add(new ParameterHolder { TypeHolder = new TypeHolder(parameterType), Name = parameter.Name! });
+                    if (parameterType != parameter.ParameterType)
+                    {
+                        method.Parameters.Last().TypeHolder.Source = new TypeHolder(parameter.ParameterType);
+                    }
+                    if (IsNullable(parameter))
+                    {
+                        method.Parameters.Last().TypeHolder.TypeName += Constants.QuestionMark;
+                    }
+                }
+
             }
         }
     }

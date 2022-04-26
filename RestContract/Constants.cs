@@ -1,4 +1,4 @@
-﻿namespace Net.Leksi.Server.Contract;
+﻿namespace Net.Leksi.RestContract;
 
 internal static class Constants
 {
@@ -53,4 +53,5 @@ internal static class Constants
     internal const string Delete = "DELETE";
     internal const string Head = "HEAD";
     internal const string Patch = "PATCH";
+    internal const string Underscore = "_";
 }
