@@ -19,10 +19,10 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNet.Mvc" Version="5.2.8" />
-    <PackageReference Include="Net.Leksi.DtoKit" Version="1.0.0" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\DtoKit\DtoKit\DtoKitDebug.csproj" />
     <ProjectReference Include="..\RestContractCommon\RestContractCommonDebug.csproj" />
   </ItemGroup>
 

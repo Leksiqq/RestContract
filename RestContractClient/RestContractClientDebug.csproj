@@ -4,8 +4,9 @@
 		<TargetFramework>net6.0</TargetFramework>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
-		<AssemblyName>Net.Leksi.RestContractCommon</AssemblyName>
+		<AssemblyName>Net.Leksi.RestContractClient</AssemblyName>
 		<RootNamespace>Net.Leksi.RestContract</RootNamespace>
 		<OutputType>Library</OutputType>
 	</PropertyGroup>
+
 </Project>

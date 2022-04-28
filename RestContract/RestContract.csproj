@@ -4,8 +4,8 @@
 		<TargetFramework>net6.0</TargetFramework>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
-		<AssemblyName>ClientServerContract</AssemblyName>
-		<RootNamespace>Net.Leksi.Server.Contract</RootNamespace>
+		<AssemblyName>Net.Leksi.RestContract</AssemblyName>
+		<RootNamespace>Net.Leksi.RestContract</RootNamespace>
 		<OutputType>Library</OutputType>
 		<Copyright>2022-04-15</Copyright>
 		<VersionPrefix>1.0.0</VersionPrefix>
@@ -15,11 +15,11 @@
 		</Description>
 		<GenerateDocumentationFile>True</GenerateDocumentationFile>
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-		<PackageId>Net.Leksi.$(AssemblyName)</PackageId>
+		<PackageId>$(AssemblyName)</PackageId>
 		<Authors>Alexey leksiq Zakharov</Authors>
-		<RepositoryUrl>https://sourceforge.net/p/clientservercontract/code</RepositoryUrl>
-		<RepositoryUrl>https://github.com/Leksiqq/ClientServerContract</RepositoryUrl>
-		<PackageProjectUrl>https://clientservercontract.sourceforge.io/</PackageProjectUrl>
+		<RepositoryUrl>https://sourceforge.net/p/restcontract/code</RepositoryUrl>
+		<RepositoryUrl>https://github.com/Leksiqq/RestContract</RepositoryUrl>
+		<PackageProjectUrl>https://restcontract.sourceforge.io/</PackageProjectUrl>
 		<PackageTags>ASP.NET</PackageTags>
 		<IsPackable>true</IsPackable>
 	</PropertyGroup>
@@ -33,7 +33,8 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <PackageReference Include="Net.Leksi.ClientServerContractCommon" Version="1.0.0" />
+	  <PackageReference Include="Net.Leksi.DtoJsonConverter" Version="1.0.0" />
+	  <PackageReference Include="Net.Leksi.RestContractCommon" Version="1.0.0" />
 	  <PackageReference Include="Net.Leksi.DtoCore" Version="1.0.0" />
 	</ItemGroup>
 

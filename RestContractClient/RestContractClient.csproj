@@ -4,10 +4,10 @@
     <TargetFramework>net6.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-	  <AssemblyName>Net.Leksi.RestContractCommon</AssemblyName>
+	  <AssemblyName>Net.Leksi.RestContractClient</AssemblyName>
 	  <RootNamespace>Net.Leksi.RestContract</RootNamespace>
 	  <OutputType>Library</OutputType>
-	  <Copyright>2022-04-19</Copyright>
+	  <Copyright>2022-04-27</Copyright>
 	  <VersionPrefix>1.0.0</VersionPrefix>
 	  <PackageRequireLicenseAcceptance>True</PackageRequireLicenseAcceptance>
 	  <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -20,7 +20,7 @@
 	  <RepositoryUrl>https://sourceforge.net/p/restcontract/code</RepositoryUrl>
 	  <RepositoryUrl>https://github.com/Leksiqq/RestContract</RepositoryUrl>
 	  <PackageProjectUrl>https://restcontract.sourceforge.io/</PackageProjectUrl>
-	  <PackageTags>ASP.NET Client</PackageTags>
+	  <PackageTags>ASP.NET</PackageTags>
 	  <IsPackable>true</IsPackable>
   </PropertyGroup>
 

@@ -9,7 +9,12 @@ internal class ParameterHolder
 
     public override string ToString()
     {
-        return (Attributes.Count > 0 ? String.Join(Constants.Comma, Attributes) + Constants.Space : String.Empty) + TypeHolder.ToString()
+        return ToString(false);
+    }
+    public string ToString(bool source)
+    {
+        return (Attributes.Count > 0 ? String.Join(Constants.Comma, Attributes) + Constants.Space : String.Empty) 
+            + (source && TypeHolder.Source is { } ? TypeHolder.Source.ToString() : TypeHolder.ToString())
             + (Name is null ? String.Empty : Constants.Space + Name);
     }
 }
