@@ -2,11 +2,25 @@
 
 internal class Client
 {
-    internal void Run<TConnector>(Uri baseAddress, string controllerInterfaceFullName, string controllerProxyFullName, 
-        string connectorBaseFullName, Dictionary<string, string> target)
+    internal void Run(Uri baseAddress, string secretWord, Dictionary<string, string> target)
     {
-        target["controllerInterface"] = controllerInterfaceFullName;
-        target["controllerProxy"] = controllerProxyFullName;
-        target["connectorBase"] = connectorBaseFullName;
+        HttpClient client = new HttpClient();
+        client.BaseAddress = baseAddress;
+        client.DefaultRequestHeaders.Add(Server.SecretWordHeader, secretWord);
+        foreach(string key in target.Keys)
+        {
+            HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, key);
+
+            HttpResponseMessage response = client.Send(request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                target[key] = response.Content.ReadAsStringAsync().Result;
+            }
+            else
+            {
+                target[key] = "// Not implemented yet";
+            }
+        }
     }
 }

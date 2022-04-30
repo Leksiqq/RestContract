@@ -4,13 +4,10 @@
     <TargetFramework>net6.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>Net.Leksi.RestContractCodeGenerator</AssemblyName>
+    <RootNamespace>Net.Leksi.RestContract</RootNamespace>
     <OutputType>Library</OutputType>
   </PropertyGroup>
-
-  <ItemGroup>
-    <Folder Include="Pages\Shared\" />
-    <Folder Include="Properties\" />
-  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation" Version="6.0.4" />

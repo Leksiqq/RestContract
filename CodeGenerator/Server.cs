@@ -1,11 +1,13 @@
 ﻿using Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation;
 using Microsoft.Extensions.FileProviders;
+using Net.Leksi.Dto;
 using System.Reflection;
 
 namespace Net.Leksi.RestContract;
 
 internal class Server
 {
+    internal const string SecretWordHeader = "X-Secret-Word";
     internal void Generate<TConnector>(string controllerInterfaceFullName, string controllerProxyFullName, 
         string connectorBaseFullName, Dictionary<string, string> target)
     {
@@ -30,16 +32,20 @@ internal class Server
                 options.FileProviders.Add(new EmbeddedFileProvider(assembly));
             });
 
+            DtoKit.Install(builder.Services, services => { });
+
+            builder.Services.AddSingleton<Requisitor>();
+
             WebApplication app = builder.Build();
 
             string secretWord = Guid.NewGuid().ToString();
 
             app.Use(async (context, next) =>
             {
-                if(!context.Request.Headers.ContainsKey("X-Secret-Word") || !context.Request.Headers["X-Secret-Word"].Contains(secretWord))
+                if(!context.Request.Headers.ContainsKey(SecretWordHeader) || !context.Request.Headers[SecretWordHeader].Contains(secretWord))
                 {
                     context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                    await context.Response.WriteAsync($"X-Secret-Word: {secretWord}");
+                    await context.Response.WriteAsync("");
                 }
                 else
                 {
@@ -47,18 +53,17 @@ internal class Server
                 }
             });
 
-            app.UseStaticFiles();
-
-            app.UseRouting();
-
             app.MapRazorPages();
 
             app.Lifetime.ApplicationStarted.Register(() =>
             {
-                Console.WriteLine(string.Join("; ", app.Urls));
+                BuildModels<TConnector>(controllerInterfaceFullName, controllerProxyFullName, connectorBaseFullName);
+                target["ControllerInterface"] = null;
+                target["ControllerProxy"] = null;
+                target["ConnectorBase"] = null;
                 Client client = new();
-                client.Run<TConnector>(new Uri(app.Urls.First()), controllerInterfaceFullName, controllerProxyFullName, connectorBaseFullName, target);
-                //app.StopAsync();
+                client.Run(new Uri(app.Urls.First()), secretWord, target);
+                app.StopAsync();
             });
 
             app.Urls.Clear();
@@ -70,9 +75,14 @@ internal class Server
             }
             catch (IOException ex)
             {
+                Console.WriteLine(ex);
                 ++port;
             }
         }
 
+    }
+
+    private void BuildModels<TConnector>(string controllerInterfaceFullName, string controllerProxyFullName, string connectorBaseFullName)
+    {
     }
 }
