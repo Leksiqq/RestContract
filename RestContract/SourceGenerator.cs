@@ -21,7 +21,8 @@ namespace Net.Leksi.RestContract;
 /// </summary>
 public partial class SourceGenerator
 {
-    private static readonly Regex _routeParams = new Regex("^(?:.*?({\\*?([^?:=}\\s]+).*?}).*?)*.*$");
+    private static readonly Regex _routeParts = new Regex(@"^(.*?)(\?.*?)?(#.*?)?$");
+    private static readonly Regex _routeParams = new Regex(@"^(?:.*?({\*?([^?:=}\s]+).*?}).*?)*.*$");
 
     private readonly DtoServiceProvider? _dtoServices;
 
@@ -104,7 +105,7 @@ public partial class SourceGenerator
 ";
     }
 
-    private object GenerateConnectorBaseClass()
+    private string GenerateConnectorBaseClass()
     {
         _usings.Clear();
         _sb.Clear();
@@ -118,20 +119,23 @@ public partial class SourceGenerator
         UpdateUsings(new TypeHolder(typeof(IServiceProvider)));
         UpdateUsings(Constants.DependencyInjection);
 
+        List<string> usedVariables = new();
+
+        string httpConnectorThArg = httpConnectorTh.TypeName.ToLower();
+        string httpConnectorThVariable = GetVariableName($"{Constants.Underscore}{httpConnectorThArg}", usedVariables);
+
         _sb.Append(Constants.Namespace).Append(_connectorNamespace).AppendLine(Constants.Semicolon).AppendLine()
             .Append(Constants.Public).Append(Constants.Class).AppendLine(_connectorClass)
             .AppendLine(Constants.OpenBlock)
             .Append(Constants.Indent).Append(Constants.Private).Append(Constants.Readonly).Append(httpConnectorTh.TypeName).Append(Constants.Space)
-            .Append(Constants.Underscore).Append(httpConnectorTh.TypeName.ToLower()).AppendLine(Constants.Semicolon)
+            .Append(httpConnectorThVariable).AppendLine(Constants.Semicolon)
             .Append(Constants.Indent).Append(Constants.Public).Append(_connectorClass).Append(Constants.LeftParen)
-            .Append(httpConnectorTh.TypeName).Append(Constants.Space).Append(httpConnectorTh.TypeName.ToLower()).AppendLine(Constants.RightParen)
+            .Append(httpConnectorTh.TypeName).Append(Constants.Space).Append(httpConnectorThArg).AppendLine(Constants.RightParen)
             .Append(Constants.Indent).AppendLine(Constants.OpenBlock)
-            .Append(Constants.Indent).Append(Constants.Indent).Append(Constants.Underscore).Append(httpConnectorTh.TypeName.ToLower())
-            .Append(Constants.EqualSign).Append(httpConnectorTh.TypeName.ToLower()).AppendLine(Constants.Semicolon)
+            .Append(Constants.Indent).Append(Constants.Indent).Append(httpConnectorThVariable)
+            .Append(Constants.EqualSign).Append(httpConnectorThArg).AppendLine(Constants.Semicolon)
             .Append(Constants.Indent).AppendLine(Constants.CloseBlock)
             ;
-
-        //.Append(Constants.Colon).AppendLine(httpConnectorTh.TypeName)
 
         TypeHolder taskOfResponseTh = new TypeHolder(typeof(Task<HttpResponseMessage>));
         UpdateUsings(taskOfResponseTh);
@@ -146,56 +150,88 @@ public partial class SourceGenerator
 
         foreach (MethodHolder method in _methods)
         {
+            int usedVariablesCount = usedVariables.Count;
+            usedVariables.AddRange(method.Parameters.Select(p => p.Name));
+            Dictionary<string, string> parameterAliases = new();
+
+            string optionsThVar = GetVariableName(optionsTh.TypeName.ToLower(), usedVariables);
+            string converterThVar = GetVariableName(converterTh.TypeName.ToLower(), usedVariables);
+
             _sb.Append(Constants.Indent).Append(Constants.Public).Append(taskOfResponseTh)
                 .AppendLine(method.ToString(true, false)).Append(Constants.Indent).AppendLine(Constants.OpenBlock);
 
             Dictionary<string, string> deserialized = new();
             foreach (ParameterHolder parameter in method.Parameters)
             {
-                if (method.RouteMatch.ContainsKey(parameter.Name.ToLower()) && parameter.TypeHolder.Source is TypeHolder)
+                if (
+                    (
+                        (method.PathMatch?.ContainsKey(parameter.Name.ToLower()) ?? false)
+                        || (method.QueryMatch?.ContainsKey(parameter.Name.ToLower()) ?? false)
+                    )
+                    && parameter.TypeHolder.Source is TypeHolder
+                )
                 {
                     deserialized.Add(parameter.Name, parameter.TypeHolder.TypeName);
                 }
             }
 
-
             _sb.Append(Constants.Indent).Append(Constants.Indent).Append(optionsTh).Append(Constants.QuestionMark)
-                .Append(Constants.Space).Append(optionsTh.TypeName.ToLower())
+                .Append(Constants.Space).Append(optionsThVar)
                     .Append(Constants.EqualSign).Append(Constants.Null).AppendLine(Constants.Semicolon);
+
 
             if (deserialized.Count > 0)
             {
 
                 UpdateUsings(converterTh);
 
-                _sb.Append(Constants.Indent).Append(Constants.Indent).Append(converterTh).Append(Constants.Space).Append(converterTh.TypeName.ToLower())
-                    .Append(Constants.EqualSign).Append(Constants.Underscore).Append(httpConnectorTh.TypeName.ToLower())
+
+
+                _sb.Append(Constants.Indent).Append(Constants.Indent).Append(converterTh).Append(Constants.Space).Append(converterThVar)
+                    .Append(Constants.EqualSign).Append(httpConnectorThVariable)
                     .Append(Constants.GetRequiredService1).Append(Constants.BeginGeneric).Append(converterTh).Append(Constants.EndGeneric)
                     .Append(Constants.LeftParen).Append(Constants.RightParen).AppendLine(Constants.Semicolon)
-                    .Append(Constants.Indent).Append(Constants.Indent).Append(optionsTh.TypeName.ToLower())
+                    .Append(Constants.Indent).Append(Constants.Indent).Append(optionsThVar)
                     .Append(Constants.EqualSign).Append(Constants.NewObject).Append(Constants.LeftParen).Append(Constants.RightParen).AppendLine(Constants.Semicolon)
-                    .Append(Constants.Indent).Append(Constants.Indent).Append(optionsTh.TypeName.ToLower()).Append(Constants.Dot).Append(Constants.Converters)
-                    .Append(Constants.Dot).Append(Constants.Add).Append(Constants.LeftParen).Append(converterTh.TypeName.ToLower()).Append(Constants.RightParen)
+                    .Append(Constants.Indent).Append(Constants.Indent).Append(optionsThVar).Append(Constants.Dot).Append(Constants.Converters)
+                    .Append(Constants.Dot).Append(Constants.Add).Append(Constants.LeftParen).Append(converterThVar).Append(Constants.RightParen)
                     .AppendLine(Constants.Semicolon);
 
             }
-            foreach (ParameterHolder parameter in method.Parameters)
+
+            string path = "";
+
+            for (int i = 0; i < 2; ++i)
             {
-                if (method.RouteMatch.ContainsKey(parameter.Name))
+                string pathOrQuery = i == 0 ? method.Path : method.Query;
+                if(!string.IsNullOrEmpty(pathOrQuery))
                 {
-                    _sb.Append(Constants.Indent).Append(Constants.Indent).Append(StringTh).Append(Constants.Space)
-                        .Append(Constants.Underscore).Append(parameter.Name).Append(Constants.EqualSign).Append(httpUtilityTh)
-                        .Append(Constants.Dot).Append(Constants.UrlEncode).Append(Constants.LeftParen).Append(Constants.Serialize)
-                            .Append(Constants.LeftParen)
-                            .Append(parameter.Name).Append(Constants.Comma).Append(optionsTh.TypeName.ToLower())
-                            .Append(Constants.RightParen).Append(Constants.RightParen).AppendLine(Constants.Semicolon);
+                    Dictionary<string, string> match = i == 0 ? method.PathMatch : method.QueryMatch;
+
+
+                    foreach (ParameterHolder parameter in method.Parameters)
+                    {
+                        if (match?.ContainsKey(parameter.Name) ?? false)
+                        {
+                            parameterAliases[parameter.Name] = GetVariableName(parameter.Name, usedVariables);
+                            _sb.Append(Constants.Indent).Append(Constants.Indent).Append(StringTh).Append(Constants.Space)
+                                .Append(parameterAliases[parameter.Name]).Append(Constants.EqualSign).Append(httpUtilityTh)
+                                .Append(Constants.Dot).Append(Constants.UrlEncode).Append(Constants.LeftParen).Append(Constants.Serialize)
+                                    .Append(Constants.LeftParen)
+                                    .Append(parameter.Name).Append(Constants.Comma).Append(optionsThVar)
+                                    .Append(Constants.RightParen).Append(Constants.RightParen).AppendLine(Constants.Semicolon);
+                        }
+                    }
+
+                    string part = match?.Keys.Aggregate(pathOrQuery, (acc, next) =>
+                    {
+                        return acc.Replace(match[next], $"{{{parameterAliases[next]}}}");
+                    }) ?? pathOrQuery;
+
+                    path += part;
                 }
             }
 
-            string path = method.RouteMatch.Keys.Aggregate(method.Path, (acc, next) =>
-            {
-                return acc.Replace(method.RouteMatch[next], $"{{_{next}}}");
-            });
             _sb.Append(Constants.Indent).Append(Constants.Indent).Append(StringTh).Append(Constants.Space).Append(Constants.UrlPath)
                 .Append(Constants.EqualSign).Append(Constants.DollarSign).Append(Constants.Quot)
                 .Append(path.Replace("\"", "\\\"")).Append(Constants.Quot).AppendLine(Constants.Semicolon);
@@ -205,8 +241,10 @@ public partial class SourceGenerator
             TypeHolder httpMethodTh = new TypeHolder(typeof(HttpMethod));
             UpdateUsings(httpMethodTh);
 
+            string httpRequestMessageThVar = GetVariableName(httpRequestMessageTh.TypeName.ToLower(), usedVariables);
+
             _sb.Append(Constants.Indent).Append(Constants.Indent).Append(httpRequestMessageTh).Append(Constants.Space)
-                .Append(httpRequestMessageTh.TypeName.ToLower()).Append(Constants.EqualSign).Append(Constants.NewObject)
+                .Append(httpRequestMessageThVar).Append(Constants.EqualSign).Append(Constants.NewObject)
                 .Append(Constants.LeftParen).Append(httpMethodTh).Append(Constants.Dot).Append(method.HttpMethod)
                 .Append(Constants.Comma).Append(Constants.UrlPath).Append(Constants.RightParen).AppendLine(Constants.Semicolon);
 
@@ -218,7 +256,7 @@ public partial class SourceGenerator
                 {
                     if(methodContentTypeAttribute is null)
                     {
-                        throw new Exception($"[{nameof(ContentTypeAttribute).Replace(nameof(Attribute), string.Empty)}(...)] required for method: {method.Name}");
+                        throw new Exception($"[{nameof(ContentTypeAttribute).Replace(nameof(Attribute), string.Empty)}(...)] required for method {method.Name}");
                     }
 
                     ContentHolder holder;
@@ -231,16 +269,71 @@ public partial class SourceGenerator
                     {
                         holder = contents[contentAttribute.Part];
                     }
-                    if(parameter.Attributes.Find(a => a.Attribute is ContentTypeAttribute)?.Attribute is ContentTypeAttribute contentTypeAttribute)
+                    bool hasSetAttribute = false;
+                    if (parameter.Attributes.Find(a => a.Attribute is SetContentTypeAttribute)?.Attribute is SetContentTypeAttribute setContentTypeAttribute)
                     {
-
+                        if (holder.ContentType is Type || holder.ContentTypeParameter is { })
+                        {
+                            throw new Exception($"Parameter {parameter.Name} already has {nameof(holder.ContentType)} at method {method.Name}");
+                        }
+                        if (parameter.TypeHolder.Type != typeof(Type) && parameter.TypeHolder.Source.Type != typeof(Type))
+                        {
+                            throw new Exception($"Parameter {parameter.Name} must have type {typeof(Type)} at method {method.Name}");
+                        }
+                        holder.ContentTypeParameter = parameter.Name;
+                        hasSetAttribute = true;
+                    }
+                    if (parameter.Attributes.Find(a => a.Attribute is SetFilenameAttribute)?.Attribute is SetFilenameAttribute setFilenameAttribute)
+                    {
+                        if (holder.Filename is { } || holder.FilenameParameter is { })
+                        {
+                            throw new Exception($"Parameter {parameter.Name} already has {nameof(holder.Filename)} at method {method.Name}");
+                        }
+                        if (parameter.TypeHolder.Type != typeof(string) && parameter.TypeHolder.Source.Type != typeof(string))
+                        {
+                            throw new Exception($"Parameter {parameter.Name} must have type {typeof(string)} at method {method.Name}");
+                        }
+                        holder.FilenameParameter = parameter.Name;
+                        hasSetAttribute = true;
+                    }
+                    if (parameter.Attributes.Find(a => a.Attribute is FilenameAttribute)?.Attribute is FilenameAttribute filenameAttribute)
+                    {
+                        if (holder.Filename is { } || holder.FilenameParameter is { })
+                        {
+                            throw new Exception($"Parameter {parameter.Name} already has {nameof(holder.Filename)} at method {method.Name}");
+                        }
+                        if (hasSetAttribute)
+                        {
+                            throw new Exception($"Parameter {parameter.Name} already has Set... attribute at method {method.Name}");
+                        }
+                        holder.Filename = filenameAttribute.Filename;
+                    }
+                    if (parameter.Attributes.Find(a => a.Attribute is ContentTypeAttribute)?.Attribute is ContentTypeAttribute contentTypeAttribute)
+                    {
+                        if (holder.ContentType is Type || holder.ContentTypeParameter is { })
+                        {
+                            throw new Exception($"Parameter {parameter.Name} already has {nameof(holder.ContentType)} at method {method.Name}");
+                        }
+                        if (hasSetAttribute)
+                        {
+                            throw new Exception($"Parameter {parameter.Name} already has Set... attribute at method {method.Name}");
+                        }
+                        holder.ContentType = contentTypeAttribute.ContentType;
                     }
 
-                    if(contents.Count > 1)
+                    if(!hasSetAttribute)
+                    {
+                        if(holder.ValueParameter is { })
+                        {
+                            throw new Exception($"Parameter {parameter.Name} already has value at method {method.Name}");
+                        }
+                        holder.ValueParameter = parameter.Name;
+                    }
+
+                    if (contents.Count > 1)
                     {
                         if(
-                            methodContentTypeAttribute.ContentType != typeof(MultipartContent)
-                            && methodContentTypeAttribute.ContentType != typeof(MultipartFormDataContent)
+                            methodContentTypeAttribute.ContentType != typeof(MultipartFormDataContent)
                             && methodContentTypeAttribute.ContentType != typeof(FormUrlEncodedContent)
                         )
                         {
@@ -250,17 +343,46 @@ public partial class SourceGenerator
                 }
             }
 
+            foreach(ContentHolder contentHolder in contents.Values)
+            {
+                if ((contentHolder.Filename is { } || contentHolder.FilenameParameter is { }) 
+                    && methodContentTypeAttribute.ContentType != typeof(MultipartFormDataContent))
+                {
+                    throw new Exception($"Parameter {contentHolder.ValueParameter} have unsupported directive  {nameof(contentHolder.Filename)} at method {method.Name}");
+                }
+
+                if (contentHolder.ContentType is null && contentHolder.ContentTypeParameter is null)
+                {
+                    contentHolder.ContentType = typeof(JsonContent);
+                }
+            }
+
+            Console.WriteLine(String.Join("\n", contents.Values.Select(v => v.ToString())));
+
             _sb.Append(Constants.Indent).Append(Constants.Indent).Append(Constants.Return)
-                .Append(Constants.Underscore).Append(httpConnectorTh.TypeName.ToLower()).Append(Constants.Dot).Append(Constants.SendAsync).Append(Constants.LeftParen).Append(httpRequestMessageTh.TypeName.ToLower())
+                .Append(httpConnectorThVariable).Append(Constants.Dot).Append(Constants.SendAsync).Append(Constants.LeftParen).Append(httpRequestMessageThVar)
                 .Append(Constants.RightParen).AppendLine(Constants.Semicolon);
 
             _sb.Append(Constants.Indent).AppendLine(Constants.CloseBlock);
+
+            usedVariables.RemoveRange(usedVariablesCount, usedVariables.Count - usedVariablesCount);
+
         }
         _sb.AppendLine(Constants.CloseBlock);
 
         ApplyUsings();
 
         return _sb.ToString();
+    }
+
+    private static string GetVariableName(string source, List<string> used)
+    {
+        while (used.Contains(source))
+        {
+            source = $"{Constants.Underscore}{source}";
+        }
+        used.Add(source);
+        return source;
     }
 
     private string GenerateMvcControllerInterface()
@@ -279,8 +401,22 @@ public partial class SourceGenerator
             method.Attributes.Clear();
             UpdateUsings(method);
 
-            _sb.Append(Constants.Indent).Append(Constants.Space)
-                .Append(method.ToString(true, true)).AppendLine(Constants.Semicolon);
+            _sb.Append(Constants.Indent).Append(method.ReturnType.TypeName).Append(Constants.Space)
+                .Append(method.Name).Append(Constants.LeftParen);
+            int length = _sb.Length;
+            foreach (ParameterHolder ph in method.Parameters)
+            {
+                if (method.PathMatch?.ContainsKey(ph.Name) ?? false)
+                {
+                    UpdateUsings(ph);
+                    _sb.Append(ph.ToString(true, false)).Append(Constants.Comma);
+                }
+            }
+            if (length != _sb.Length)
+            {
+                _sb.Length -= Constants.Comma.Length;
+            }
+            _sb.Append(Constants.RightParen).AppendLine(Constants.Semicolon);
 
             method.Attributes.AddRange(tmp);
         }
@@ -345,12 +481,27 @@ public partial class SourceGenerator
             method.Attributes.Clear();
             UpdateUsings(method);
 
-            _sb.Append(Constants.Indent).Append(Constants.Public).Append(Constants.Async).AppendLine(method.ToString()).Append(Constants.Indent)
+            _sb.Append(Constants.Indent).Append(Constants.Public).Append(Constants.Async).Append(method.ReturnType)
+                .Append(Constants.Space).Append(method.Name).Append(Constants.LeftParen);
+            int length = _sb.Length;
+            foreach (ParameterHolder ph in method.Parameters)
+            {
+                if (method.PathMatch?.ContainsKey(ph.Name) ?? false)
+                {
+                    UpdateUsings(ph);
+                    _sb.Append(ph.ToString(true, false)).Append(Constants.Comma);
+                }
+            }
+            if (length != _sb.Length)
+            {
+                _sb.Length -= Constants.Comma.Length;
+            }
+            _sb.AppendLine(Constants.RightParen).Append(Constants.Indent)
                 .AppendLine(Constants.OpenBlock);
             Dictionary<string, string> deserialized = new();
             foreach (ParameterHolder parameter in method.Parameters)
             {
-                if (method.RouteMatch.ContainsKey(parameter.Name) && parameter.TypeHolder.Source is TypeHolder source)
+                if ((method.PathMatch?.ContainsKey(parameter.Name) ?? false) && parameter.TypeHolder.Source is TypeHolder source)
                 {
                     deserialized.Add(parameter.Name, source.TypeName);
                 }
@@ -399,10 +550,10 @@ public partial class SourceGenerator
                 .Append(Constants.RightParen).Append(controllerTh.TypeName.ToLower())
                 .Append(Constants.RightParen).Append(Constants.Dot)
                 .Append(method.Name).Append(Constants.LeftParen);
-            int length = _sb.Length;
+            length = _sb.Length;
             foreach (ParameterHolder ph in method.Parameters)
             {
-                if (method.RouteMatch.ContainsKey(ph.Name))
+                if (method.PathMatch?.ContainsKey(ph.Name) ?? false)
                 {
                     UpdateUsings(ph);
                     if (deserialized.ContainsKey(ph.Name))
@@ -519,12 +670,6 @@ public partial class SourceGenerator
         {
             if (connectorMethod.GetCustomAttribute<RoutePathAttribute>() is RoutePathAttribute routeAttribute)
             {
-                Match routeMatch = _routeParams.Match(routeAttribute.Path);
-                if (!routeMatch.Success)
-                {
-                    throw new Exception($"Invalid route format: {routeAttribute.Path}, method: {connectorMethod.Name}(...)");
-                }
-
                 Type returnType = typeof(Task);
 
                 MethodHolder method = new()
@@ -533,28 +678,67 @@ public partial class SourceGenerator
                     ReturnType = new TypeHolder(returnType),
                 };
 
-                foreach(CustomAttributeData attribute in connectorMethod.CustomAttributes)
+                Match routePartsMatch = _routeParts.Match(routeAttribute.Path);
+                if (!routePartsMatch.Success)
                 {
-                    method.Attributes.Add(new AttributeHolder(connectorMethod.GetCustomAttribute(attribute.AttributeType)));
+                    throw new Exception($"Invalid route format: {routeAttribute.Path}, method: {connectorMethod.Name}(...)");
+                }
+                for (int iPart = 1; iPart <= 3; iPart++)
+                {
+                    if (!string.IsNullOrEmpty(routePartsMatch.Groups[iPart].Value))
+                    {
+                        if (iPart == 3)
+                        {
+                            throw new Exception($"Hash {routePartsMatch.Groups[iPart].Value} is not allowed, method: {connectorMethod.Name}(...)");
+                        }
+                        Match routePartMatch = _routeParams.Match(routePartsMatch.Groups[iPart].Value);
+                        if (!routePartMatch.Success)
+                        {
+                            throw new Exception($"Invalid route format: {routeAttribute.Path}, method: {connectorMethod.Name}(...)");
+                        }
+
+                        Dictionary<string, string>? matches = null;
+
+                        for (int i = 0; i < routePartMatch.Groups[1].Captures.Count; i++)
+                        {
+                            if(matches is null)
+                            {
+                                matches = new();
+                            }
+                            if (matches.ContainsKey(routePartMatch.Groups[2].Captures[i].Value.ToLower()))
+                            {
+                                throw new Exception($"Not unique template in route : {routePartMatch.Groups[1].Captures[i].Value}");
+                            }
+                            ParameterInfo pathParameter = connectorMethod.GetParameters().Where(
+                                p => p.Name.ToLower() == routePartMatch.Groups[2].Captures[i].Value.ToLower()).FirstOrDefault();
+                            if (pathParameter is null)
+                            {
+                                throw new Exception($"path parameter is not bound: {routePartMatch.Groups[2].Captures[i].Value}, method: {connectorMethod.Name}(...)");
+                            }
+                            if (pathParameter.GetCustomAttribute<ContentAttribute>() is { })
+                            {
+                                throw new Exception($"Both path and body parameter: {routePartMatch.Groups[2].Captures[i].Value}, method: {connectorMethod.Name}(...)");
+                            }
+                            matches[routePartMatch.Groups[2].Captures[i].Value.ToLower()] = routePartMatch.Groups[1].Captures[i].Value;
+                        }
+                        switch (iPart)
+                        {
+                            case 1:
+                                method.Path = routePartsMatch.Groups[iPart].Value;
+                                method.PathMatch = matches;
+                                break;
+                            case 2:
+                                method.Query = routePartsMatch.Groups[iPart].Value;
+                                method.QueryMatch = matches;
+                                break;
+                        }
+
+                    }
                 }
 
-                for (int i = 0; i < routeMatch.Groups[1].Captures.Count; i++)
+                foreach (CustomAttributeData attribute in connectorMethod.CustomAttributes)
                 {
-                    if (method.RouteMatch.ContainsKey(routeMatch.Groups[1].Captures[i].Value.ToLower()))
-                    {
-                        throw new Exception($"Not unique template in route : {routeMatch.Groups[1].Captures[i].Value}");
-                    }
-                    ParameterInfo pathParameter = connectorMethod.GetParameters().Where(
-                        p => p.Name.ToLower() == routeMatch.Groups[2].Captures[i].Value.ToLower()).FirstOrDefault();
-                    if (pathParameter is null)
-                    {
-                        throw new Exception($"path parameter is not bound: {routeMatch.Groups[1].Captures[i].Value}, method: {connectorMethod.Name}(...)");
-                    }
-                    if (pathParameter.GetCustomAttribute<ContentAttribute>() is { })
-                    {
-                        throw new Exception($"Both path and body parameter: {routeMatch.Groups[2].Captures[i].Value}, method: {connectorMethod.Name}(...)");
-                    }
-                    method.RouteMatch[routeMatch.Groups[2].Captures[i].Value.ToLower()] = routeMatch.Groups[1].Captures[i].Value;
+                    method.Attributes.Add(new AttributeHolder(connectorMethod.GetCustomAttribute(attribute.AttributeType)));
                 }
 
                 if (returnType != connectorMethod.ReturnType)
@@ -563,8 +747,6 @@ public partial class SourceGenerator
                 }
 
                 _methods.Add(method);
-
-                method.Path = routeAttribute.Path;
 
                 if (connectorMethod.GetCustomAttribute<HttpMethodAttribute>() is HttpMethodAttribute httpMethodAttribute)
                 {
@@ -597,7 +779,7 @@ public partial class SourceGenerator
                 }
 
                 ParameterInfo[] parameters = connectorMethod.GetParameters()
-                    .Where(p => method.RouteMatch.ContainsKey(p.Name.ToLower()) || p.GetCustomAttribute<ContentAttribute>() is { }).ToArray();
+                    .Where(p => method.PathMatch?.ContainsKey(p.Name.ToLower()) ?? false || p.GetCustomAttribute<ContentAttribute>() is { }).ToArray();
 
                 foreach (ParameterInfo parameter in parameters)
                 {

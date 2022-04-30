@@ -69,4 +69,6 @@ internal static class Constants
     internal const string DependencyInjection = "Microsoft.Extensions.DependencyInjection";
     internal const string Private = "private ";
     internal const string Readonly = "readonly ";
+    internal const string Path = "path";
+    internal const string Query = "query";
 }

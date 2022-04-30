@@ -2,12 +2,14 @@
 
 internal class TypeHolder
 {
+    internal Type Type{ get; set; }
     internal string TypeName { get; set; }
     internal string Namespace { get; set; }
     internal TypeHolder[]? GenericArguments { get; set; }
     internal TypeHolder? Source { get; set; }
     internal TypeHolder(Type type)
     {
+        Type = type;
         if (type.IsGenericType)
         {
             if (type.GetGenericTypeDefinition() == typeof(Nullable<>))
