@@ -8,8 +8,7 @@ namespace Net.Leksi.RestContract;
 internal class Server
 {
     internal const string SecretWordHeader = "X-Secret-Word";
-    internal void Generate<TConnector>(string controllerInterfaceFullName, string controllerProxyFullName, 
-        string connectorBaseFullName, Dictionary<string, string> target)
+    internal void Generate(object requisitor, Dictionary<string, string> target)
     {
         string result = string.Empty;
         int port = 5000;
@@ -21,7 +20,7 @@ internal class Server
 
             builder.Services.AddRazorPages();
 
-            Assembly assembly = GetType().Assembly;
+            Assembly assembly = requisitor.GetType().Assembly;
 
             builder.Services.AddControllersWithViews()
                 .AddApplicationPart(assembly)
@@ -34,7 +33,7 @@ internal class Server
 
             DtoKit.Install(builder.Services, services => { });
 
-            builder.Services.AddSingleton<Requisitor>();
+            builder.Services.AddSingleton(requisitor.GetType(), op => requisitor);
 
             WebApplication app = builder.Build();
 
@@ -57,7 +56,6 @@ internal class Server
 
             app.Lifetime.ApplicationStarted.Register(() =>
             {
-                BuildModels<TConnector>(controllerInterfaceFullName, controllerProxyFullName, connectorBaseFullName);
                 target["ControllerInterface"] = null;
                 target["ControllerProxy"] = null;
                 target["ConnectorBase"] = null;
@@ -80,9 +78,5 @@ internal class Server
             }
         }
 
-    }
-
-    private void BuildModels<TConnector>(string controllerInterfaceFullName, string controllerProxyFullName, string connectorBaseFullName)
-    {
     }
 }

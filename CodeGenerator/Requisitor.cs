@@ -2,7 +2,7 @@
 
 namespace Net.Leksi.RestContract;
 
-internal class Requisitor
+public class Requisitor
 {
     private readonly DtoServiceProvider? _dtoServices;
     public Requisitor(IServiceProvider? services)
@@ -17,5 +17,5 @@ internal class Requisitor
         }
     }
 
-
+    public string FullName { get; set; }
 }

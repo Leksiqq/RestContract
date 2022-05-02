@@ -13,4 +13,8 @@
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation" Version="6.0.4" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\DtoKit\DtoKit\DtoKitDebug.csproj" />
+  </ItemGroup>
+
 </Project>
