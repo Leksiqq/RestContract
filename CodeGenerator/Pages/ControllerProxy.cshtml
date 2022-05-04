@@ -1,0 +1,55 @@
+﻿@page
+@using Net.Leksi.RestContract
+@model Net.Leksi.RestContract.Pages.ControllerProxyModel
+//------------------------------
+// MVC Controller proxy 
+// @string.Join(".", new string[] { Model.NamespaceValue, Model.ClassName})
+// (Generated automatically)
+//------------------------------
+@foreach(string usng in Model.Usings)
+{
+    <text>using @usng;
+</text>
+}
+
+namespace @Model.NamespaceValue;
+
+public class @Model.ClassName: Controller
+{
+    @foreach (MethodModel mm in Model.Methods)
+    {
+        @for(int i = 0; i < mm.Attributes.Count; ++i)
+        {
+            <text>    [</text><text>@mm.Attributes[i].Name</text>
+            @if (mm.Attributes[i].Properties.Count > 0)
+            {
+            <text>(</text>
+            string[] keys = mm.Attributes[i].Properties.Keys.ToArray();
+                for(int j = 0; j < keys.Length; ++j)
+                {
+                    if(j > 0)
+                    {
+                        <text>, </text>
+                    }
+                    <text>@keys[j] = @Html.Raw(mm.Attributes[i].Properties[keys[j]])</text>
+                }
+            <text>)</text>
+            }<text>]
+</text>
+        }
+        <text>    public async @mm.Type @mm.Name</text><text>(</text>
+        @for(int i = 0; i < mm.Parameters.Count; ++i)
+        {
+            if(i > 0)
+            {
+                <text>, </text>
+            }
+            <text>@mm.Parameters[i].Type @mm.Parameters[i].Name</text>
+        }
+        <text>)
+    {
+
+    }
+</text>
+    }
+}

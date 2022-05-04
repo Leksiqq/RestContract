@@ -1,8 +1,33 @@
 ﻿@page
+@using Net.Leksi.RestContract
 @model Net.Leksi.RestContract.Pages.ControllerInterfaceModel
-@{
+//------------------------------
+// MVC Controller interface 
+// @string.Join(".", new string[] { Model.NamespaceValue, Model.ClassName})
+// (Generated automatically)
+//------------------------------
+@foreach(string usng in Model.Usings)
+{
+    <text>using @usng;
+</text>
 }
 
-//------------------------------
-// MVC Controller interface @Model.FullName. (Generated automatically)
-//------------------------------
+namespace @Model.NamespaceValue;
+
+public interface @Model.ClassName 
+{
+    @foreach (MethodModel mm in Model.Methods)
+    {
+        <text>    @mm.Type @mm.Name</text><text>(</text>
+        @for(int i = 0; i < mm.Parameters.Count; ++i)
+        {
+            if(i > 0)
+            {
+                <text>, </text>
+            }
+            <text>@mm.Parameters[i].Type @mm.Parameters[i].Name</text>
+        }
+        <text>);
+</text>
+    }
+}

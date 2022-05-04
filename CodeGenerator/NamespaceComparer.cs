@@ -10,19 +10,19 @@ public class NamespaceComparer : IComparer<string>
     /// <inheritdoc/>
     public int Compare(string? s1, string? s2)
     {
-        if (s1 == Constants.System && s2 != Constants.System)
+        if (s1 == "System" && s2 != "System")
         {
             return 1;
         }
-        if (s1 != Constants.System && s2 == Constants.System)
+        if (s1 != "System" && s2 == "System")
         {
             return -1;
         }
-        if (s1!.StartsWith(Constants.SystemDot) && !s2!.StartsWith(Constants.SystemDot))
+        if (s1!.StartsWith("System.") && !s2!.StartsWith("System."))
         {
             return 1;
         }
-        if (!s1!.StartsWith(Constants.SystemDot) && s2!.StartsWith(Constants.SystemDot))
+        if (!s1!.StartsWith("System.") && s2!.StartsWith("System."))
         {
             return -1;
         }

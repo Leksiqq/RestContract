@@ -13,9 +13,9 @@ internal class ParameterHolder
     }
     public string ToString(bool source, bool attributes)
     {
-        return (attributes && Attributes.Count > 0 ? String.Join(Constants.Comma, Attributes) + Constants.Space : String.Empty) 
+        return (attributes && Attributes.Count > 0 ? $"{(String.Join(", ", Attributes))} " : String.Empty) 
             + (source && TypeHolder.Source is { } ? TypeHolder.Source.ToString() : TypeHolder.ToString())
-            + (Name is null ? String.Empty : Constants.Space + Name);
+            + (Name is null ? String.Empty : $" {Name}");
     }
 }
 

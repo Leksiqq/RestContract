@@ -1,17 +1,11 @@
-using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.AspNetCore.Mvc;
 
 namespace Net.Leksi.RestContract.Pages;
 
-public class ControllerInterfaceModel : PageModel
+public class ControllerInterfaceModel : BasePageModel
 {
-    private readonly Requisitor _requisitor;
-    public string FullName => _requisitor.FullName;
-
-    public ControllerInterfaceModel(Requisitor requisitor)
+    public void OnGet([FromServices] IMvcControllerInterfaceBuilder builder)
     {
-        _requisitor = requisitor;
-    }
-    public void OnGet()
-    {
+        builder.GenerateMvcControllerInterface(this);
     }
 }

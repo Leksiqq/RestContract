@@ -1,6 +1,6 @@
 ﻿namespace Net.Leksi.RestContract;
 
-internal class TypeHolder
+public class TypeHolder
 {
     internal Type Type{ get; set; }
     internal string TypeName { get; set; }
@@ -16,13 +16,13 @@ internal class TypeHolder
             {
                 type = type.GetGenericArguments().First();
                 Namespace = type.Namespace ?? String.Empty;
-                TypeName = $"{type.Name}{Constants.QuestionMark}";
+                TypeName = $"{type.Name}?";
                 GenericArguments = null;
             }
             else
             {
                 Namespace = type.Namespace ?? String.Empty;
-                TypeName = type.Name.Substring(0, type.Name.IndexOf(Constants.Apos));
+                TypeName = type.Name.Substring(0, type.Name.IndexOf("`"));
                 GenericArguments = type.GetGenericArguments().Select(v =>
                 {
                     return new TypeHolder(v);
@@ -39,7 +39,7 @@ internal class TypeHolder
     public override string ToString()
     {
         return TypeName
-            + (GenericArguments is null ? String.Empty : Constants.BeginGeneric + string.Join(Constants.Comma, GenericArguments.Select(v => v.ToString())) + Constants.EndGeneric);
+            + (GenericArguments is null ? String.Empty : $"<{(string.Join(", ", GenericArguments.Select(v => v.ToString())))}>");
     }
 
 }

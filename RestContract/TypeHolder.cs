@@ -1,13 +1,13 @@
 ﻿namespace Net.Leksi.RestContract;
 
-internal class TypeHolder
+public class TypeHolder
 {
-    internal Type Type{ get; set; }
-    internal string TypeName { get; set; }
-    internal string Namespace { get; set; }
-    internal TypeHolder[]? GenericArguments { get; set; }
-    internal TypeHolder? Source { get; set; }
-    internal TypeHolder(Type type)
+    public Type Type{ get; set; }
+    public string TypeName { get; set; }
+    public string Namespace { get; set; }
+    public TypeHolder[]? GenericArguments { get; set; }
+    public TypeHolder? Source { get; set; }
+    public TypeHolder(Type type)
     {
         Type = type;
         if (type.IsGenericType)

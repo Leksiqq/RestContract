@@ -3,12 +3,12 @@ using System.Text;
 
 namespace Net.Leksi.RestContract;
 
-internal class AttributeHolder
+public class AttributeHolder
 {
-    internal TypeHolder TypeHolder { get; set; }
-    internal Attribute Attribute { get; set; }
+    public TypeHolder TypeHolder { get; set; }
+    public Attribute Attribute { get; set; }
 
-    internal AttributeHolder(Attribute attribute)
+    public AttributeHolder(Attribute attribute)
     {
         TypeHolder = new TypeHolder(attribute.GetType());
         Attribute = attribute;

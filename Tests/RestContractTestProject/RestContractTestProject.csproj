@@ -17,7 +17,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\Demo\Client\Connector\Connector.csproj" />
     <ProjectReference Include="..\..\..\Demo\Contract\Contract.csproj" />
-    <ProjectReference Include="..\..\CodeGenerator\CodeGenerator.csproj" />
+    <ProjectReference Include="..\..\CodeGenerator\CodeGeneratorDebug.csproj" />
   </ItemGroup>
 
 </Project>
