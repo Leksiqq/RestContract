@@ -4,12 +4,13 @@ using Net.Leksi.DocsRazorator;
 using Net.Leksi.Dto;
 using Net.Leksi.RestContract.Pages;
 using System.Reflection;
-using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Web;
 
 namespace Net.Leksi.RestContract;
 
-public class CodeGenerator : IMvcControllerInterfaceBuilder, IMvcControllerProxyBuilder
+public class HelpersBuilder : IControllerInterfaceBuilder, IControllerProxyBuilder, IConnectorBaseBuilder
 {
 
     private static readonly Regex _routeParts = new Regex(@"^(.*?)(\?.*?)?(#.*?)?$");
@@ -35,7 +36,7 @@ public class CodeGenerator : IMvcControllerInterfaceBuilder, IMvcControllerProxy
 
     private readonly NamespaceComparer _namespaceComparer = new();
 
-    public CodeGenerator(IServiceProvider services)
+    public HelpersBuilder(IServiceProvider services)
     {
         if (services is DtoServiceProvider dtoServices)
         {
@@ -50,46 +51,136 @@ public class CodeGenerator : IMvcControllerInterfaceBuilder, IMvcControllerProxy
             _dtoServices = null;
         }
     }
-    public async Task GenerateHelpers<TConnector>(string controllerInterfaceFullName, string controllerProxyFullName,
+    public async Task BuildHelpers<TConnector>(string controllerInterfaceFullName, string controllerProxyFullName,
         string connectorBaseFullName)
     {
         CollectRequisites<TConnector>(controllerInterfaceFullName, controllerProxyFullName, connectorBaseFullName);
         Generator generator = new();
         await foreach (KeyValuePair<string, object> result in generator.Generate(
             new object[] {
-                new KeyValuePair<Type, object>(typeof(IMvcControllerInterfaceBuilder), this),
-                new KeyValuePair<Type, object>(typeof(IMvcControllerProxyBuilder), this)
+                new KeyValuePair<Type, object>(typeof(IConnectorBaseBuilder), this),
+                new KeyValuePair<Type, object>(typeof(IControllerInterfaceBuilder), this),
+                new KeyValuePair<Type, object>(typeof(IControllerProxyBuilder), this)
             },
             new string[] {
+                "ConnectorBase",
                 "ControllerInterface",
                 "ControllerProxy",
             }
         ))
         {
-            Console.WriteLine($"// {result.Key}");
+            if (result.Value is Exception)
+            {
+                Console.WriteLine($"// {result.Key}");
+            }
             Console.WriteLine(result.Value);
         }
 
     }
 
-    public void GenerateMvcControllerProxy(ControllerProxyModel model)
+    public void BuildConnectorBase(ConnectorBaseModel model)
     {
         _usings.Clear();
+        List<string> usedVariables = new();
+        usedVariables.Add("_httpConnector");
+
+        model.NamespaceValue = _connectorNamespace;
+        model.ClassName = _connectorClass;
+
+        model.Methods = new List<MethodModel>();
+
+        UpdateUsings(new TypeHolder(typeof(HttpConnector)));
+        UpdateUsings(new TypeHolder(typeof(HttpResponseMessage)));
+
+
+        foreach (MethodHolder method in _methods)
+        {
+            int usedVariablesCount = usedVariables.Count;
+
+            UpdateUsings(method);
+            MethodModel methodModel = new()
+            {
+                Name = method.Name,
+                Type = method.ReturnType.TypeName,
+                Parameters = new List<ParameterModel>(),
+            };
+            foreach (ParameterHolder ph in method.Parameters)
+            {
+                int caseMatch = 0;
+                if (((method.PathMatch?.ContainsKey(ph.Name) ?? false) && (caseMatch = 1) == caseMatch)
+                    || (ph.Attributes.Find(a => a.Attribute is BodyAttribute) is { } && (caseMatch = 2) == caseMatch)
+                )
+                {
+                    usedVariables.Add(ph.Name);
+                    UpdateUsings(ph);
+                    ParameterModel pm = new() { Name = ph.Name, Type = ph.TypeHolder.Source?.TypeName ?? ph.TypeHolder.TypeName };
+                    methodModel.Parameters.Add(pm);
+                    if(caseMatch == 1 && ph.TypeHolder.Source is { })
+                    {
+                        methodModel.HasSerialized = true;
+                        if (methodModel.Deserializing is null)
+                        {
+                            TypeHolder converterTh = new TypeHolder(typeof(DtoJsonConverterFactory));
+                            UpdateUsings(converterTh);
+                            TypeHolder optionsTh = new TypeHolder(typeof(JsonSerializerOptions));
+                            UpdateUsings(optionsTh);
+                            TypeHolder httpUtilityTh = new TypeHolder(typeof(HttpUtility));
+                            UpdateUsings(httpUtilityTh);
+                            TypeHolder keyProcessingTh = new TypeHolder(typeof(KeysProcessing));
+                            UpdateUsings(keyProcessingTh);
+
+                            methodModel.OptionsVariable = GetVariableName("getOptions", usedVariables);
+                            methodModel.ConverterVariable = GetVariableName("getConverter", usedVariables);
+                            methodModel.Deserializing = new();
+                        }
+                        string localVariable = GetVariableName(ph.Name, usedVariables);
+                        methodModel.Deserializing.Add(new Tuple<string, string, string>(ph.TypeHolder.Source.TypeName,
+                            localVariable, ph.Name));
+                    }
+                }
+            }
+            model.Methods.Add(methodModel);
+            usedVariables.RemoveRange(usedVariablesCount, usedVariables.Count - usedVariablesCount);
+        }
+        model.Usings = _usings;
+    }
+
+    public void BuildControllerProxy(ControllerProxyModel model)
+    {
+        _usings.Clear();
+        List<string> usedVariables = new();
 
         model.NamespaceValue = _proxyNamespace;
         model.ClassName = _proxyClass;
 
         model.Methods = new List<MethodModel>();
 
+        UpdateUsings(new TypeHolder(typeof(Controller)));
+
+
         foreach (MethodHolder method in _methods)
         {
+            usedVariables.Clear();
+
             UpdateUsings(method);
-            MethodModel methodModel = new() { 
-                Name = method.Name, 
-                Type = method.ReturnType.TypeName, 
-                Parameters = new List<ParameterModel>(), 
-                Attributes = new List<AttributeModel>() 
+            MethodModel methodModel = new()
+            {
+                Name = method.Name,
+                Type = method.ReturnType.TypeName,
+                Parameters = new List<ParameterModel>(),
+                Attributes = new List<AttributeModel>()
             };
+
+            AttributeHolder? routePathAH = method.Attributes.Where(ah => ah.TypeHolder.TypeName == typeof(RoutePathAttribute).Name).FirstOrDefault();
+            if (routePathAH is { } && routePathAH.Attribute is RoutePathAttribute routePathAttribute)
+            {
+                AttributeHolder routeAH = new AttributeHolder(new RouteAttribute(routePathAttribute.Path));
+                UpdateUsings(routeAH);
+                AttributeModel am = new() { Name = routeAH.GetNameWithoutAttribute() };
+                am.Properties[String.Empty] = $@"""{routePathAttribute.Path}""";
+                methodModel.Attributes.Add(am);
+            }
+
             AttributeHolder httpMethodAttribute = new(method.HttpMethod switch
             {
                 "Post" => new HttpPostAttribute(),
@@ -124,33 +215,56 @@ public class CodeGenerator : IMvcControllerInterfaceBuilder, IMvcControllerProxy
                 methodModel.Attributes.Add(am);
             }
 
-            //foreach (AttributeHolder ah in method.Attributes)
-            //{
-            //    UpdateUsings(ah);
-            //    AttributeModel am = new() { Name = ah.GetNameWithoutAttribute() };
-            //    methodModel.Attributes.Add(am);
-            //}
-            //AttributeHolder? authorizeAttribute = method.Attributes.Where(ah => ah.TypeHolder.TypeName == typeof(AuthorizeAttribute).Name).FirstOrDefault();
-            //if (authorizeAttribute is { })
-            //{
-            //    UpdateUsings(authorizeAttribute);
-            //    AttributeModel am = new() { Name = authorizeAttribute.GetNameWithoutAttribute() };
-            //    methodModel.Attributes.Add(am);
-            //}
             foreach (ParameterHolder ph in method.Parameters)
             {
-                if (method.PathMatch?.ContainsKey(ph.Name) ?? false)
+                int caseMatch = 0;
+                if (((method.PathMatch?.ContainsKey(ph.Name) ?? false) && (caseMatch = 1) == caseMatch)
+                    || (ph.Attributes.Find(a => a.Attribute is BodyAttribute) is { } && (caseMatch = 2) == caseMatch)
+                )
                 {
+                    if (caseMatch == 1)
+                    {
+                        usedVariables.Add(ph.Name);
+                    }
+                    if (caseMatch == 1 && ph.TypeHolder.Source is { } || caseMatch == 2)
+                    {
+                        methodModel.HasSerialized = true;
+                        if (methodModel.Deserializing is null)
+                        {
+                            TypeHolder converterTh = new TypeHolder(typeof(DtoJsonConverterFactory));
+                            UpdateUsings(converterTh);
+                            TypeHolder optionsTh = new TypeHolder(typeof(JsonSerializerOptions));
+                            UpdateUsings(optionsTh);
+
+                            methodModel.OptionsVariable = GetVariableName("options", usedVariables);
+                            methodModel.ConverterVariable = GetVariableName("converter", usedVariables);
+                            methodModel.Deserializing = new();
+                        }
+                        string localVariable = GetVariableName(ph.Name, usedVariables);
+                        methodModel.Deserializing.Add(new Tuple<string, string, string>(ph.TypeHolder.Source.TypeName,
+                            localVariable, caseMatch == 1 ? ph.Name : null));
+                        methodModel.ControllerParameters.Add(localVariable);
+                    }
+                    else
+                    {
+                        methodModel.ControllerParameters.Add(ph.Name);
+                    }
                     UpdateUsings(ph);
-                    ParameterModel pm = new() { Name = ph.Name, Type = (ph.TypeHolder.Source?.TypeName ?? ph.TypeHolder.TypeName) };
-                    methodModel.Parameters.Add(pm);
+                    if (caseMatch == 1)
+                    {
+                        ParameterModel pm = new() { Name = ph.Name, Type = ph.TypeHolder.TypeName };
+                        methodModel.Parameters.Add(pm);
+                    }
                 }
             }
+            UpdateUsings(_controllerNamespace);
+            methodModel.ControllerInterfaceClassName = _controllerClass;
+            methodModel.ControllerVariable = GetVariableName("controller", usedVariables);
             model.Methods.Add(methodModel);
         }
-        model.Usings = _usings;
+        model.Usings = _usings.Where(ns => ns != _proxyNamespace).ToList();
     }
-    public void GenerateMvcControllerInterface(ControllerInterfaceModel model)
+    public void BuildControllerInterface(ControllerInterfaceModel model)
     {
         _usings.Clear();
 
@@ -165,7 +279,7 @@ public class CodeGenerator : IMvcControllerInterfaceBuilder, IMvcControllerProxy
             MethodModel methodModel = new() { Name = method.Name, Type = method.ReturnType.TypeName, Parameters = new List<ParameterModel>() };
             foreach (ParameterHolder ph in method.Parameters)
             {
-                if (method.PathMatch?.ContainsKey(ph.Name) ?? false)
+                if (method.PathMatch?.ContainsKey(ph.Name) ?? false || ph.Attributes.Find(a => a.Attribute is BodyAttribute) is { })
                 {
                     UpdateUsings(ph);
                     ParameterModel parameterModel = new() { Name = ph.Name, Type = (ph.TypeHolder.Source?.TypeName ?? ph.TypeHolder.TypeName) };
@@ -252,7 +366,7 @@ public class CodeGenerator : IMvcControllerInterfaceBuilder, IMvcControllerProxy
                             {
                                 throw new Exception($"path parameter is not bound: {routePartMatch.Groups[2].Captures[i].Value}, method: {connectorMethod.Name}(...)");
                             }
-                            if (pathParameter.GetCustomAttribute<ContentAttribute>() is { })
+                            if (pathParameter.GetCustomAttribute<BodyAttribute>() is { })
                             {
                                 throw new Exception($"Both path and body parameter: {routePartMatch.Groups[2].Captures[i].Value}, method: {connectorMethod.Name}(...)");
                             }
@@ -285,7 +399,7 @@ public class CodeGenerator : IMvcControllerInterfaceBuilder, IMvcControllerProxy
                     {
                         ah = new AttributeHolder(connectorMethod.GetCustomAttribute(attribute.AttributeType));
                     }
-                    if(ah is { })
+                    if (ah is { })
                     {
                         method.Attributes.Add(ah);
                     }
@@ -301,7 +415,6 @@ public class CodeGenerator : IMvcControllerInterfaceBuilder, IMvcControllerProxy
                 AuthorizationAttribute? attr = connectorMethod.GetCustomAttribute<AuthorizationAttribute>();
                 if (attr is { })
                 {
-                    Console.WriteLine("Here");
                     AttributeHolder authorizationAttributeTh = new AttributeHolder(attr);
                     AuthorizeAttribute authorizeAttribute = new AuthorizeAttribute();
                     foreach (PropertyInfo pi in typeof(AuthorizationAttribute).GetProperties())
@@ -321,7 +434,12 @@ public class CodeGenerator : IMvcControllerInterfaceBuilder, IMvcControllerProxy
                 }
 
                 ParameterInfo[] parameters = connectorMethod.GetParameters()
-                    .Where(p => method.PathMatch?.ContainsKey(p.Name.ToLower()) ?? false || p.GetCustomAttribute<ContentAttribute>() is { }).ToArray();
+                    .Where(p => method.PathMatch?.ContainsKey(p.Name.ToLower()) ?? false || p.GetCustomAttribute<BodyAttribute>() is { }).ToArray();
+
+                if (parameters.Where(p => p.GetCustomAttribute<BodyAttribute>() is { }).Count() > 1)
+                {
+                    throw new Exception($"Second body parameter: {parameters.Where(p => p.GetCustomAttribute<BodyAttribute>() is { }).Last().Name}, method: {connectorMethod.Name}(...)");
+                }
 
                 foreach (ParameterInfo parameter in parameters)
                 {
@@ -387,10 +505,6 @@ public class CodeGenerator : IMvcControllerInterfaceBuilder, IMvcControllerProxy
     private void UpdateUsings(MethodHolder methodHolder)
     {
         UpdateUsings(methodHolder.ReturnType);
-        foreach (AttributeHolder ah in methodHolder.Attributes)
-        {
-            UpdateUsings(ah);
-        }
         foreach (ParameterHolder ph in methodHolder.Parameters)
         {
             UpdateUsings(ph);
@@ -438,6 +552,16 @@ public class CodeGenerator : IMvcControllerInterfaceBuilder, IMvcControllerProxy
                 UpdateUsings(typeHolder.Source);
             }
         }
+    }
+
+    private static string GetVariableName(string source, List<string> used)
+    {
+        while (used.Contains(source))
+        {
+            source = $"_{source}";
+        }
+        used.Add(source);
+        return source;
     }
 
 }

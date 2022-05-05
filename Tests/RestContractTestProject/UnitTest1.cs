@@ -19,7 +19,7 @@ namespace RestContractTestProject
         [Test]
         public void Test1()
         {
-            CodeGenerator cg = new();
+            HelpersBuilder cg = new();
             Dictionary<string, string> map = new();
             cg.GenerateHelpers<IConnector>("DtoKit.Demo.IDemoController", "DtoKit.Demo.DemoControllerProxy", "DtoKit.Demo.DemoConnectorBase", map);
             Console.WriteLine(string.Join("\n//--------------\n// Cut here\n//--------------\n", map.Values));

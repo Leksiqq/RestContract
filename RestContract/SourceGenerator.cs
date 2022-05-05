@@ -252,7 +252,7 @@ public partial class SourceGenerator
             Dictionary<int, ContentHolder> contents = new();
             foreach (ParameterHolder parameter in method.Parameters)
             {
-                if (parameter.Attributes.Find(a => a.Attribute is ContentAttribute)?.Attribute is ContentAttribute contentAttribute)
+                if (parameter.Attributes.Find(a => a.Attribute is BodyAttribute)?.Attribute is BodyAttribute contentAttribute)
                 {
                     if(methodContentTypeAttribute is null)
                     {
@@ -715,7 +715,7 @@ public partial class SourceGenerator
                             {
                                 throw new Exception($"path parameter is not bound: {routePartMatch.Groups[2].Captures[i].Value}, method: {connectorMethod.Name}(...)");
                             }
-                            if (pathParameter.GetCustomAttribute<ContentAttribute>() is { })
+                            if (pathParameter.GetCustomAttribute<BodyAttribute>() is { })
                             {
                                 throw new Exception($"Both path and body parameter: {routePartMatch.Groups[2].Captures[i].Value}, method: {connectorMethod.Name}(...)");
                             }
@@ -779,7 +779,7 @@ public partial class SourceGenerator
                 }
 
                 ParameterInfo[] parameters = connectorMethod.GetParameters()
-                    .Where(p => method.PathMatch?.ContainsKey(p.Name.ToLower()) ?? false || p.GetCustomAttribute<ContentAttribute>() is { }).ToArray();
+                    .Where(p => method.PathMatch?.ContainsKey(p.Name.ToLower()) ?? false || p.GetCustomAttribute<BodyAttribute>() is { }).ToArray();
 
                 foreach (ParameterInfo parameter in parameters)
                 {

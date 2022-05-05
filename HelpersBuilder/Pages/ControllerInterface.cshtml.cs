@@ -4,8 +4,8 @@ namespace Net.Leksi.RestContract.Pages;
 
 public class ControllerInterfaceModel : BasePageModel
 {
-    public void OnGet([FromServices] IMvcControllerInterfaceBuilder builder)
+    public void OnGet([FromServices] IControllerInterfaceBuilder builder)
     {
-        builder.GenerateMvcControllerInterface(this);
+        builder.BuildControllerInterface(this);
     }
 }

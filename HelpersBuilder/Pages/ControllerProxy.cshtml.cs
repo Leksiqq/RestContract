@@ -4,9 +4,9 @@ namespace Net.Leksi.RestContract.Pages
 {
     public class ControllerProxyModel : BasePageModel
     {
-        public void OnGet([FromServices] IMvcControllerProxyBuilder builder)
+        public void OnGet([FromServices] IControllerProxyBuilder builder)
         {
-            builder.GenerateMvcControllerProxy(this);
+            builder.BuildControllerProxy(this);
         }
     }
 }

@@ -1,0 +1,70 @@
+﻿@page
+@using Net.Leksi.RestContract
+@model Net.Leksi.RestContract.Pages.ControllerProxyModel
+//------------------------------
+// MVC Controller proxy 
+// @string.Join(".", new string[] { Model.NamespaceValue, Model.ClassName})
+// (Generated automatically)
+//------------------------------
+@foreach(string usng in Model.Usings)
+{
+    <text>using @usng;
+</text>
+}
+
+namespace @Model.NamespaceValue;
+
+public class @Model.ClassName: Controller
+{
+    @foreach (MethodModel mm in Model.Methods)
+    {
+        foreach(AttributeModel am in mm.Attributes)
+        {
+<text>    
+    [@am.Name@if (am.Properties.Count > 0) {<text>(</text>
+            string[] keys = am.Properties.Keys.ToArray();
+            for(int i = 0; i < keys.Length; ++i)
+            {
+                if(i > 0){<text>, </text>}
+                if(!string.IsNullOrEmpty(keys[i])){<text>@keys[i] = </text>}<text>@Html.Raw(am.Properties[keys[i]])</text>
+            }
+            <text>)</text> }]</text>
+        }
+<text>
+    public async @mm.Type @mm.Name</text><text>(@for(int i = 0; i < mm.Parameters.Count; ++i)
+        {
+                if(i > 0){<text>, </text>}
+                <text>@mm.Parameters[i].Type @mm.Parameters[i].Name</text>
+        })
+    {@if(mm.HasSerialized)
+        {
+<text>
+        DtoJsonConverterFactory @mm.ConverterVariable = HttpContext.RequestServices.GetRequiredService<DtoJsonConverterFactory>();
+        JsonSerializerOptions @mm.OptionsVariable = new();
+        @mm.OptionsVariable</text><text>.Converters.Add(@mm.ConverterVariable);</text>
+            foreach(Tuple<string, string, string> tuple in mm.Deserializing)
+            {
+                if(tuple.Item3 is null)
+                {
+<text>
+        @tuple.Item1 @tuple.Item2 = await HttpContext.Request.ReadFromJsonAsync<@tuple.Item1>(@mm.OptionsVariable);</text>
+                }
+                else
+                {
+<text>
+        @tuple.Item1 @tuple.Item2 = JsonSerializer.Deserialize<@tuple.Item1>(@tuple.Item3, @mm.OptionsVariable);</text>
+                }
+            }
+        } @* @if(mm.HasSerialized) *@
+        
+        Controller @mm.ControllerVariable = (Controller)HttpContext.RequestServices.GetRequiredService<@mm.ControllerInterfaceClassName>();
+        @mm.ControllerVariable@{<text/>}.ControllerContext = ControllerContext;
+        await ((@mm.ControllerInterfaceClassName)@mm.ControllerVariable).@mm.Name@{<text/>}(@for(int i = 0; i < mm.ControllerParameters.Count; ++i)
+        {
+            if(i > 0){<text>, </text>}
+            <text>@mm.ControllerParameters[i]</text>
+        });
+    }@* public async ... *@
+</text>
+    }@* @foreach (MethodModel mm in Model.Methods) *@
+}

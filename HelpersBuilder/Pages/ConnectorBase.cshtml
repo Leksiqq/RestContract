@@ -1,0 +1,49 @@
+﻿@page
+@using Net.Leksi.RestContract
+@model Net.Leksi.RestContract.Pages.ConnectorBaseModel
+//------------------------------
+// Connector base
+// @string.Join(".", new string[] { Model.NamespaceValue, Model.ClassName})
+// (Generated automatically)
+//------------------------------
+@foreach(string usng in Model.Usings)
+{
+    <text>using @usng;
+</text>
+}
+
+namespace @Model.NamespaceValue;
+
+public class @Model.ClassName
+{
+    private readonly HttpConnector _httpConnector;
+    public @Model.ClassName@{<text/>}(HttpConnector httpConnector)
+    {
+        _httpConnector = httpConnector;
+    }
+    @foreach (MethodModel mm in Model.Methods)
+    {
+<text>
+    public async Task<HttpResponseMessage> @mm.Name</text><text>(@for(int i = 0; i < mm.Parameters.Count; ++i)
+        {
+                if(i > 0){<text>, </text>}
+                <text>@mm.Parameters[i].Type @mm.Parameters[i].Name</text>
+        })
+    {@if(mm.HasSerialized)
+        {
+<text>
+        DtoJsonConverterFactory @mm.ConverterVariable = _httpConnector.Services.GetRequiredService<DtoJsonConverterFactory>();
+        @mm.ConverterVariable@{<text/>}.KeysProcessing = KeysProcessing.OnlyKeys;
+        JsonSerializerOptions @mm.OptionsVariable = new();
+        @mm.OptionsVariable@{<text/>}.Converters.Add(@mm.ConverterVariable);</text>
+            foreach(Tuple<string, string, string> tuple in mm.Deserializing)
+            {
+<text>
+        @tuple.Item1 @tuple.Item2 = HttpUtility.UrlEncode(JsonSerializer.Deserialize<@tuple.Item1>(@tuple.Item3, @mm.OptionsVariable));</text>
+            }
+        } @* @if(mm.HasSerialized) *@
+    
+    }@* public async ... *@
+</text>
+    }@* @foreach (MethodModel mm in Model.Methods) *@
+}
