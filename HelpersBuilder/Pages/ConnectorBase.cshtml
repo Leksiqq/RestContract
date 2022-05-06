@@ -24,7 +24,7 @@ public class @Model.ClassName
     @foreach (MethodModel mm in Model.Methods)
     {
 <text>
-    public async Task<HttpResponseMessage> @mm.Name</text><text>(@for(int i = 0; i < mm.Parameters.Count; ++i)
+    public Task<HttpResponseMessage> @mm.Name@{<text/>}(@for(int i = 0; i < mm.Parameters.Count; ++i)
         {
                 if(i > 0){<text>, </text>}
                 <text>@mm.Parameters[i].Type @mm.Parameters[i].Name</text>
@@ -32,16 +32,29 @@ public class @Model.ClassName
     {@if(mm.HasSerialized)
         {
 <text>
-        DtoJsonConverterFactory @mm.ConverterVariable = _httpConnector.Services.GetRequiredService<DtoJsonConverterFactory>();
-        @mm.ConverterVariable@{<text/>}.KeysProcessing = KeysProcessing.OnlyKeys;
-        JsonSerializerOptions @mm.OptionsVariable = new();
-        @mm.OptionsVariable@{<text/>}.Converters.Add(@mm.ConverterVariable);</text>
+        DtoJsonConverterFactory @mm.GetConverterVariable = _httpConnector.Services.GetRequiredService<DtoJsonConverterFactory>();
+        @mm.GetConverterVariable@{<text/>}.KeysProcessing = KeysProcessing.OnlyKeys;
+        JsonSerializerOptions @mm.GetOptionsVariable = new();
+        @mm.GetOptionsVariable@{<text/>}.Converters.Add(@mm.GetConverterVariable);</text>
             foreach(Tuple<string, string, string> tuple in mm.Deserializing)
             {
 <text>
-        @tuple.Item1 @tuple.Item2 = HttpUtility.UrlEncode(JsonSerializer.Deserialize<@tuple.Item1>(@tuple.Item3, @mm.OptionsVariable));</text>
+        @tuple.Item1 @tuple.Item2 = HttpUtility.UrlEncode(JsonSerializer.Serialize(@tuple.Item3, @mm.GetOptionsVariable));</text>
             }
         } @* @if(mm.HasSerialized) *@
+        
+        string @mm.RouteVariable = @Html.Raw($"$\"{@mm.RouteValue}\"");
+        HttpRequestMessage @mm.HttpRequestVariable = new(HttpMethod.@mm.HttpMethod, @mm.RouteVariable);
+        @if(mm.PostConverterVariable is { })
+        {
+<text>
+        DtoJsonConverterFactory @mm.PostConverterVariable = _httpConnector.Services.GetRequiredService<DtoJsonConverterFactory>();
+        JsonSerializerOptions @mm.PostOptionsVariable = new();
+        @mm.PostOptionsVariable@{<text/>}.Converters.Add(@mm.PostConverterVariable);
+        @mm.HttpRequestVariable@{<text/>}.Content = JsonContent.Create(@mm.BodyVariable, typeof(@mm.BodyType), default, @mm.PostOptionsVariable);</text>
+        }
+
+        return _httpConnector.SendAsync(@mm.HttpRequestVariable);
     
     }@* public async ... *@
 </text>

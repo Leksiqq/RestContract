@@ -55,8 +55,7 @@ public class HelpersBuilder : IControllerInterfaceBuilder, IControllerProxyBuild
         string connectorBaseFullName)
     {
         CollectRequisites<TConnector>(controllerInterfaceFullName, controllerProxyFullName, connectorBaseFullName);
-        Generator generator = new();
-        await foreach (KeyValuePair<string, object> result in generator.Generate(
+        await foreach (KeyValuePair<string, object> result in Generator.Generate(
             new object[] {
                 new KeyValuePair<Type, object>(typeof(IConnectorBaseBuilder), this),
                 new KeyValuePair<Type, object>(typeof(IControllerInterfaceBuilder), this),
@@ -91,11 +90,16 @@ public class HelpersBuilder : IControllerInterfaceBuilder, IControllerProxyBuild
 
         UpdateUsings(new TypeHolder(typeof(HttpConnector)));
         UpdateUsings(new TypeHolder(typeof(HttpResponseMessage)));
+        UpdateUsings(new TypeHolder(typeof(HttpRequestMessage)));
+        UpdateUsings("Microsoft.Extensions.DependencyInjection");
 
 
         foreach (MethodHolder method in _methods)
         {
+            Dictionary<string, string> parameterAliases = method.Parameters.Select(ph => ph.Name).ToDictionary(name => name, name => name);
+
             int usedVariablesCount = usedVariables.Count;
+            usedVariables.AddRange(method.Parameters.Select(ph => ph.Name));
 
             UpdateUsings(method);
             MethodModel methodModel = new()
@@ -104,6 +108,29 @@ public class HelpersBuilder : IControllerInterfaceBuilder, IControllerProxyBuild
                 Type = method.ReturnType.TypeName,
                 Parameters = new List<ParameterModel>(),
             };
+
+            methodModel.RouteVariable = GetVariableName("route", usedVariables);
+            methodModel.RouteValue = string.Empty;
+
+            if (!string.IsNullOrEmpty(method.Path))
+            {
+
+
+                foreach (ParameterHolder parameter in method.Parameters)
+                {
+                    if ((method.PathMatch?.ContainsKey(parameter.Name)) ?? false)
+                    {
+                        parameterAliases[parameter.Name] = GetVariableName(parameter.Name, usedVariables);
+                    }
+                }
+                string part = method.PathMatch?.Keys.Aggregate(method.Path, (acc, next) =>
+                {
+                    return acc.Replace(method.PathMatch[next], $"{{{parameterAliases[next]}}}");
+                }) ?? method.Path;
+
+                methodModel.RouteValue += part;
+            }
+
             foreach (ParameterHolder ph in method.Parameters)
             {
                 int caseMatch = 0;
@@ -111,11 +138,10 @@ public class HelpersBuilder : IControllerInterfaceBuilder, IControllerProxyBuild
                     || (ph.Attributes.Find(a => a.Attribute is BodyAttribute) is { } && (caseMatch = 2) == caseMatch)
                 )
                 {
-                    usedVariables.Add(ph.Name);
                     UpdateUsings(ph);
                     ParameterModel pm = new() { Name = ph.Name, Type = ph.TypeHolder.Source?.TypeName ?? ph.TypeHolder.TypeName };
                     methodModel.Parameters.Add(pm);
-                    if(caseMatch == 1 && ph.TypeHolder.Source is { })
+                    if(caseMatch == 1)
                     {
                         methodModel.HasSerialized = true;
                         if (methodModel.Deserializing is null)
@@ -129,16 +155,30 @@ public class HelpersBuilder : IControllerInterfaceBuilder, IControllerProxyBuild
                             TypeHolder keyProcessingTh = new TypeHolder(typeof(KeysProcessing));
                             UpdateUsings(keyProcessingTh);
 
-                            methodModel.OptionsVariable = GetVariableName("getOptions", usedVariables);
-                            methodModel.ConverterVariable = GetVariableName("getConverter", usedVariables);
+                            methodModel.GetOptionsVariable = GetVariableName("getOptions", usedVariables);
+                            methodModel.GetConverterVariable = GetVariableName("getConverter", usedVariables);
                             methodModel.Deserializing = new();
+
                         }
-                        string localVariable = GetVariableName(ph.Name, usedVariables);
-                        methodModel.Deserializing.Add(new Tuple<string, string, string>(ph.TypeHolder.Source.TypeName,
-                            localVariable, ph.Name));
+                        methodModel.Deserializing.Add(new Tuple<string, string, string>("string",
+                            parameterAliases[ph.Name], ph.Name));
+                    }
+                    else
+                    {
+                        methodModel.PostOptionsVariable = GetVariableName("postOptions", usedVariables);
+                        methodModel.PostConverterVariable = GetVariableName("postConverter", usedVariables);
+                        methodModel.BodyVariable = ph.Name;
+                        methodModel.BodyType = ph.TypeHolder.Source.TypeName;
+                        UpdateUsings(new TypeHolder(typeof(JsonContent)));
                     }
                 }
             }
+
+            methodModel.HttpRequestVariable = GetVariableName("httpRequest", usedVariables);
+            methodModel.HttpMethod = method.HttpMethod;
+
+
+
             model.Methods.Add(methodModel);
             usedVariables.RemoveRange(usedVariablesCount, usedVariables.Count - usedVariablesCount);
         }
@@ -236,8 +276,8 @@ public class HelpersBuilder : IControllerInterfaceBuilder, IControllerProxyBuild
                             TypeHolder optionsTh = new TypeHolder(typeof(JsonSerializerOptions));
                             UpdateUsings(optionsTh);
 
-                            methodModel.OptionsVariable = GetVariableName("options", usedVariables);
-                            methodModel.ConverterVariable = GetVariableName("converter", usedVariables);
+                            methodModel.GetOptionsVariable = GetVariableName("options", usedVariables);
+                            methodModel.GetConverterVariable = GetVariableName("converter", usedVariables);
                             methodModel.Deserializing = new();
                         }
                         string localVariable = GetVariableName(ph.Name, usedVariables);
@@ -338,6 +378,10 @@ public class HelpersBuilder : IControllerInterfaceBuilder, IControllerProxyBuild
                 {
                     if (!string.IsNullOrEmpty(routePartsMatch.Groups[iPart].Value))
                     {
+                        if (iPart == 2)
+                        {
+                            throw new Exception($"Query {routePartsMatch.Groups[iPart].Value} is not allowed, method: {connectorMethod.Name}(...)");
+                        }
                         if (iPart == 3)
                         {
                             throw new Exception($"Hash {routePartsMatch.Groups[iPart].Value} is not allowed, method: {connectorMethod.Name}(...)");
@@ -372,17 +416,8 @@ public class HelpersBuilder : IControllerInterfaceBuilder, IControllerProxyBuild
                             }
                             matches[routePartMatch.Groups[2].Captures[i].Value.ToLower()] = routePartMatch.Groups[1].Captures[i].Value;
                         }
-                        switch (iPart)
-                        {
-                            case 1:
-                                method.Path = routePartsMatch.Groups[iPart].Value;
-                                method.PathMatch = matches;
-                                break;
-                            case 2:
-                                method.Query = routePartsMatch.Groups[iPart].Value;
-                                method.QueryMatch = matches;
-                                break;
-                        }
+                        method.Path = routePartsMatch.Groups[iPart].Value;
+                        method.PathMatch = matches;
 
                     }
                 }
